@@ -37,17 +37,17 @@ if [ "$mode" = native ] || [ "$mode" = all ]; then
  pkg-config --exists freetype2 || missing 'FreeType development files' libfreetype-dev
  flags=$(pkg-config --cflags --libs freetype2 libdrm)
  # shellcheck disable=SC2086
- "$cc" -O3 -o "$out/rx3-fb-present" fb-present.c $flags
- "$cc" -O2 -o "$out/rx3-touch-bridge" touch-bridge.c
+ "$cc" -I src/native -O3 -o "$out/rx3-fb-present" src/native/fb-present.c $flags
+ "$cc" -I src/native -O2 -o "$out/rx3-touch-bridge" src/native/touch-bridge.c
  # shellcheck disable=SC2086
- "$cc" -O2 -o "$out/test-frame-exchange" test-frame-exchange.c $flags
- "$cc" -O2 -o "$out/test-frame-scale" test-frame-scale.c
- "$cc" -I . -o "$out/test-mixer-layout" test-mixer-layout.c
- "$cc" -O2 -o "$out/test-mixer-state" test-mixer-state.c mixer-state.c
+ "$cc" -I src/native -O2 -o "$out/test-frame-exchange" tests/native/test-frame-exchange.c $flags
+ "$cc" -I src/native -O2 -o "$out/test-frame-scale" tests/native/test-frame-scale.c
+ "$cc" -I src/native -o "$out/test-mixer-layout" tests/native/test-mixer-layout.c
+ "$cc" -I src/native -O2 -o "$out/test-mixer-state" tests/native/test-mixer-state.c src/native/mixer-state.c
  for test in test-tempo-step test-tempo-input test-pad-bank test-pad-intent; do
-  "$cc" -O2 -o "$out/$test" "$test.c"
+  "$cc" -I src/native -O2 -o "$out/$test" "tests/native/$test.c"
  done
- "$cc" -std=c11 -O2 -o "$out/test-audio-recovery" audio-recovery.c test-audio-recovery.c
+ "$cc" -I src/native -std=c11 -O2 -o "$out/test-audio-recovery" src/native/audio-recovery.c tests/native/test-audio-recovery.c
  echo "Built Pi-side helpers in $out: rx3-fb-present rx3-touch-bridge (and host tests)"
 fi
 if [ "$mode" = shim ] || [ "$mode" = all ]; then
@@ -62,9 +62,9 @@ if [ "$mode" = shim ] || [ "$mode" = all ]; then
  command -v "$objcopy_arm" >/dev/null 2>&1 || missing "$objcopy_arm" binutils-arm-linux-gnueabi
  # A failed build must never leave an older shim behind for ./rx3 install.
  rm -f "$out/fbshim-audio.so" "$out/fbshim.so" "$out/pi-clock.o" "$out/pi-clock.bin"
- RX3_BUILD=$out sh build-audio-candidate.sh "$runtime"
+ RX3_BUILD=$out sh scripts/build/build-audio-candidate.sh "$runtime"
  cp "$out/fbshim-audio.so" "$out/fbshim.so"
- "$as_arm" -o "$out/pi-clock.o" pi-clock.S
+ "$as_arm" -o "$out/pi-clock.o" src/native/pi-clock.S
  "$objcopy_arm" -O binary -j .text "$out/pi-clock.o" "$out/pi-clock.bin"
  echo "Built ARM32 shim and clock stub in $out: fbshim.so pi-clock.bin"
 fi

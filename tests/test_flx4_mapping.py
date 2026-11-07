@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('flx4_bridge', ROOT / 'flx6-rx3.py')
+spec = importlib.util.spec_from_file_location('flx4_bridge', ROOT / 'scripts/controllers/flx6-rx3.py')
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
 

@@ -376,7 +376,7 @@ class Launcher:
                 self.spawn('touch', [self.build / 'rx3-touch-bridge', touch,
                                      self.rt('dev/tsc2007_2-0048'), '--fullscreen'], env)
             if not running['midi']:
-                self.spawn('midi', [sys.executable, REPO / 'flx6-rx3.py', '--mapping', mapping,
+                self.spawn('midi', [sys.executable, REPO / 'scripts/controllers/flx6-rx3.py', '--mapping', mapping,
                                     '--fifo', self.rt('dev/rx3-control'),
                                     '--state', self.state / 'midi-jog-state.json',
                                     '--port-name', self.config.get('controller', 'midi_name'),

@@ -7,7 +7,7 @@ import unittest
 import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from firmware_image import crypt, crypt_stream
+from rx3tool.firmware_image import crypt, crypt_stream
 from rx3tool import recover as recovery
 
 
