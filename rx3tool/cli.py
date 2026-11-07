@@ -225,9 +225,9 @@ def config_command(config, args):
     target = config.source or (REPO / 'rx3.conf')
     if args.action == 'init':
         if target.exists() and not args.force:
-            say(f'{target} already exists; edit it, or use --force to recreate it from rx3.conf.example')
+            say(f'{target} already exists; edit it, or use --force to recreate it from config/rx3.conf.example')
             return 1
-        text = (REPO / 'rx3.conf.example').read_text(encoding='utf-8')
+        text = (REPO / 'config/rx3.conf.example').read_text(encoding='utf-8')
         target.write_text(text, encoding='utf-8')
         say(f'Created {target}. Every value set to "auto" is detected at start; edit it only if')
         say('./rx3 doctor reports a problem or you want a different path, card or USB.')

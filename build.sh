@@ -62,7 +62,7 @@ if [ "$mode" = shim ] || [ "$mode" = all ]; then
  command -v "$objcopy_arm" >/dev/null 2>&1 || missing "$objcopy_arm" binutils-arm-linux-gnueabi
  # A failed build must never leave an older shim behind for ./rx3 install.
  rm -f "$out/fbshim-audio.so" "$out/fbshim.so" "$out/pi-clock.o" "$out/pi-clock.bin"
- RX3_BUILD=$out sh build-audio-candidate.sh "$runtime"
+ RX3_BUILD=$out sh scripts/build/build-audio-candidate.sh "$runtime"
  cp "$out/fbshim-audio.so" "$out/fbshim.so"
  "$as_arm" -o "$out/pi-clock.o" src/native/pi-clock.S
  "$objcopy_arm" -O binary -j .text "$out/pi-clock.o" "$out/pi-clock.bin"

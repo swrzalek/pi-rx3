@@ -9,7 +9,7 @@ import json
 import sys
 from pathlib import Path
 
-base = Path(__file__).resolve().parent
+base = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(base))
 from rx3tool.cramfs import extract  # noqa: E402
 from rx3tool.safefs import Tree  # noqa: E402

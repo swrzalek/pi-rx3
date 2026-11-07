@@ -61,7 +61,7 @@ MOUNTS = (
 
 def asound_conf(card):
     """The tested asound.conf with the configured ALSA card ID."""
-    text = (REPO / 'asound.conf').read_text()
+    text = (REPO / 'config/asound.conf').read_text()
     if 'CARD=DDJFLX6' not in text:
         raise Failure('asound.conf template no longer names CARD=DDJFLX6')
     return text.replace('CARD=DDJFLX6', f'CARD={card}')

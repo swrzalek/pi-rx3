@@ -410,7 +410,7 @@ class Recovery:
         if self.dry_run:
             say(f'  [dry-run] would write {self.iso}')
             return
-        from firmware_image import crypt_stream, load_key, autoexec_iso_metadata
+        from .firmware_image import crypt_stream, load_key, autoexec_iso_metadata
         partial = self.iso.with_name(self.iso.name + '.partial')
         length = self.release['update_size']
         with open_zip_member(firmware, 'XDJRX3.UPD') as source, partial.open('wb') as target:

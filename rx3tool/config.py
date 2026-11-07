@@ -388,4 +388,4 @@ def alsa_cards(path='/proc/asound/cards'):
 
 
 def render_example():
-    return (REPO / 'rx3.conf.example').read_text(encoding='utf-8')
+    return (REPO / 'config/rx3.conf.example').read_text(encoding='utf-8')

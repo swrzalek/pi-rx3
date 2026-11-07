@@ -5,11 +5,10 @@ player. Each is replaced atomically, only while the player is stopped, and the
 previous versions are kept as `.previous` for rollback.
 """
 import hashlib
-import importlib.util
 import json
 import time
 
-from . import REPO
+from . import patch_player, patch_tempo25
 from .assemble import MARKER, read_marker, write_marker
 from .safefs import Tree
 from .system import player_pids
@@ -19,25 +18,17 @@ PLAYER = 'root/pdj/rbp-pi'
 SHIM = 'lib/fbshim.so'
 
 
-def load_script(name):
-    spec = importlib.util.spec_from_file_location(name.replace('-', '_'), REPO / f'{name}.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
 def build_player(runtime, clock, tempo25):
-    patcher = load_script('patch-player')
     with Tree(runtime) as tree, tree.open_read('root/pdj/rbp') as handle:
         original = handle.read()
     try:
-        data = patcher.patched(original, clock)
+        data = patch_player.patched(original, clock)
         if tempo25:
-            data = load_script('patch-tempo25').patched(data)
+            data = patch_tempo25.patched(data)
     except ValueError as error:
         raise Failure(f'Cannot patch the player: {error}')
     return data

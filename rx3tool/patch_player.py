@@ -39,7 +39,7 @@ def patched(original, clock):
 
 
 if __name__ == '__main__':
-    b = Path(__file__).parent
+    b = Path(__file__).resolve().parent.parent
     args = [Path(a) for a in sys.argv[1:]]
     if len(args) not in (0, 3):
         sys.exit(__doc__)

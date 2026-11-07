@@ -1,6 +1,6 @@
 #!/bin/sh
 # Compatibility name for ./rx3 stop: releases MIDI, audio, display and mounts.
-here=$(dirname "$(readlink -f "$0")")
+here=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 if [ ! -f "$here/rx3tool/launch.py" ]; then
  echo "stop-rx3.sh now needs the rest of the rx3-pi checkout. Run ./rx3 stop from the checkout." >&2
  exit 2

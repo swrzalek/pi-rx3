@@ -426,7 +426,7 @@ class Doctor:
             return
         try:
             import importlib.util
-            spec = importlib.util.spec_from_file_location('flx6_rx3', REPO / 'flx6-rx3.py')
+            spec = importlib.util.spec_from_file_location('flx6_rx3', REPO / 'scripts/controllers/flx6-rx3.py')
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             bridge = module.Bridge(str(mapping), lambda *a: None)

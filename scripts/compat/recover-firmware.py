@@ -3,10 +3,10 @@
 
 Outputs now go to work/firmware/ (see ./rx3 recover --help); nothing is flashed.
 """
-import os
+from pathlib import Path
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from rx3tool.cli import main  # noqa: E402
 
 if __name__ == '__main__':

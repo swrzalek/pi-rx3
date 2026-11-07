@@ -2,7 +2,7 @@
 """BiteDJ shift/scratch overlap: cancel, suppress, isolate, and recover."""
 import importlib.util,tempfile
 from pathlib import Path
-s=importlib.util.spec_from_file_location('bridge',(Path(__file__).resolve().parents[2] / 'flx6-rx3.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+s=importlib.util.spec_from_file_location('bridge',(Path(__file__).resolve().parents[2] / 'scripts/controllers/flx6-rx3.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 controls=[]
 for deck in (1,2):
  for key,status,note in (('shiftPressed',0x8f+deck,0x3f),('jogTouch',0x8f+deck,0x36),('jogTurn',0xaf+deck,0x21)):

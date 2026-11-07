@@ -1,15 +1,15 @@
 #!/bin/sh
 # Builds the ARM32 player shim separately. build.sh copies it to build/fbshim.so.
 # This script never deploys or overwrites the running runtime library.
-# Usage: sh build-audio-candidate.sh RUNTIME   (the assembled RX3 runtime)
+# Usage: sh scripts/build/build-audio-candidate.sh RUNTIME   (the assembled RX3 runtime)
 set -eu
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 rootfs=${1:-${RX3_RUNTIME:-}}
 out=${RX3_BUILD:-build}
 compiler=${CC_ARM:-arm-linux-gnueabi-gcc}
 card=${RX3_ALSA_CARD:-DDJFLX6}
 if [ -z "$rootfs" ]; then
- echo "Usage: sh build-audio-candidate.sh /path/to/assembled/runtime" >&2
+ echo "Usage: sh scripts/build/build-audio-candidate.sh /path/to/assembled/runtime" >&2
  exit 2
 fi
 case "$card" in
