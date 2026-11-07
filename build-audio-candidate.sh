@@ -25,13 +25,13 @@ test -f "$rootfs/usr/lib/libasound.so.2" || {
  exit 1
 }
 mkdir -p "$out"
-"$compiler" -march=armv7-a -shared -fPIC -O2 -fomit-frame-pointer \
+"$compiler" -I src/native -march=armv7-a -shared -fPIC -O2 -fomit-frame-pointer \
  -fno-builtin -nostdlib -idirafter /usr/include \
  -U_TIME_BITS -D_TIME_BITS=32 -U_FILE_OFFSET_BITS -D_FILE_OFFSET_BITS=32 \
  -DRX3_AUDIO_RECOVERY "-DRX3_CTL_DEVICE=\"hw:CARD=$card\"" \
- -Wl,--version-script=fbshim-audio.map \
- -o "$out/fbshim-audio.so" fbshim.c control-shim.c native-touch.c native-ui.c \
- frame-publish.c native-grid.c native-tempo25.c mixer-state.c native-mixer.c native-pad-modes.c \
- audio-proxy.c audio-alsa.c audio-recovery.c audio-handles.c audio-write.c audio-pacer.c \
+ -Wl,--version-script=src/native/fbshim-audio.map \
+ -o "$out/fbshim-audio.so" src/native/fbshim.c src/native/control-shim.c src/native/native-touch.c src/native/native-ui.c \
+ src/native/frame-publish.c src/native/native-grid.c src/native/native-tempo25.c src/native/mixer-state.c src/native/native-mixer.c src/native/native-pad-modes.c \
+ src/native/audio-proxy.c src/native/audio-alsa.c src/native/audio-recovery.c src/native/audio-handles.c src/native/audio-write.c src/native/audio-pacer.c \
  -L"$rootfs/usr/lib" -Wl,-rpath-link,"$rootfs/lib" -l:libasound.so.2 \
  -L"$rootfs/lib" -l:libdl.so.2 -l:libpthread.so.0 -l:librt.so.1 -l:libc.so.6 -lgcc

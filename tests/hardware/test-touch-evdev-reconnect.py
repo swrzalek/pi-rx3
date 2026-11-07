@@ -2,7 +2,7 @@
 """Root-only Linux uinput reconnect test. Uses isolated files and EVIOCGRAB."""
 import fcntl,os,struct,subprocess,tempfile,time
 from pathlib import Path
-source=Path(__file__).resolve().parent
+source=Path(__file__).resolve().parents[2] / 'src/native'
 EV=struct.Struct('@llHHi');REPORT=struct.Struct('<BBHH')
 def wait_for(predicate):
  end=time.monotonic()+5

@@ -1,5 +1,5 @@
 > Historical development notes. Commands and paths below describe the old installation.
-> For current setup, use [README.md](README.md).
+> For current setup, use [README.md](../README.md).
 
 # RX3 on Raspberry Pi — development checkpoint
 
@@ -40,15 +40,15 @@ that every experiment or test is portable:
 
 | Area | Current assumption | Files to adapt |
 | --- | --- | --- |
-| Host account and rootfs | `/home/pompu_5`, `/home/pompu_5/rx3-rootfs`; helpers deployed directly into that home | `start-rx3.sh`, `stop-rx3.sh`, `prepare-runtime.py`, `prepare-library-view.sh`, `pi-control.py`, `pi-controls.h`, `fb-present.c` |
+| Host account and rootfs | `/home/pompu_5`, `/home/pompu_5/rx3-rootfs`; helpers deployed directly into that home | `start-rx3.sh`, `stop-rx3.sh`, `prepare-runtime.py`, `prepare-library-view.sh`, `pi-control.py`, `src/native/pi-controls.h`, `src/native/fb-present.c` |
 | Build rootfs | Defaults to the owner's rootfs; ARM32 compiler defaults to `arm-linux-gnueabi-gcc` | Pass `sh build.sh /absolute/path/to/prepared-rootfs`; `build-audio-candidate.sh` also accepts that path and `CC_ARM` |
 | Linux permissions | Chroot user/group `1000:44`, supplementary groups `29,44,995,991`; USB mount owner `1000:1000`; mount/start commands use `sudo -n` | `start-rx3.sh`, `prepare-runtime.py`; use your actual IDs and device permissions |
 | USB source | Filesystem UUID `0FFF-3865`, fallback filesystem type `vfat` | `USB_UUID` and mount handling in `prepare-runtime.py`; another filesystem needs compatible handling |
-| Display | Host `/dev/fb0`, DRM `/dev/dri/card0`, physical 1200×1920 portrait mode, rotated 1920×1200 presentation | `drm-present.h`, `fb-present.c`; different geometry requires code changes/rebuild, not just a different device path |
-| Physical touch | `/dev/input/by-path/platform-1f00080000.i2c-event`, fixed rotation/coordinate scaling | `start-rx3.sh`, `touch-bridge.c`; select your touchscreen and adapt its geometry |
-| Audio output | ALSA card `DDJFLX6`, 44.1kHz, four channels with separate master/headphones | `asound.conf`, `fbshim.c`; another interface needs routing changes and playback/cue verification |
+| Display | Host `/dev/fb0`, DRM `/dev/dri/card0`, physical 1200×1920 portrait mode, rotated 1920×1200 presentation | `src/native/drm-present.h`, `src/native/fb-present.c`; different geometry requires code changes/rebuild, not just a different device path |
+| Physical touch | `/dev/input/by-path/platform-1f00080000.i2c-event`, fixed rotation/coordinate scaling | `start-rx3.sh`, `src/native/touch-bridge.c`; select your touchscreen and adapt its geometry |
+| Audio output | ALSA card `DDJFLX6`, 44.1kHz, four channels with separate master/headphones | `asound.conf`, `src/native/fbshim.c`; another interface needs routing changes and playback/cue verification |
 | MIDI and preferred mapping | Exactly one `DDJ-FLX6` MIDI input; the owner's BiteDJ XML and mapping semantics | `flx6-rx3.py`; `--mapping` and `--fifo` override two paths, but device discovery, jog-state path and FLX6 translation remain specific |
-| Control/state paths | Host paths beneath the owner's rootfs, plus `/home/pompu_5/rx3-midi-jog-state.json` | `pi-controls.h`, `flx6-rx3.py`, `start-rx3.sh`, `stop-rx3.sh`, replay helpers |
+| Control/state paths | Host paths beneath the owner's rootfs, plus `/home/pompu_5/rx3-midi-jog-state.json` | `src/native/pi-controls.h`, `flx6-rx3.py`, `start-rx3.sh`, `stop-rx3.sh`, replay helpers |
 | Executable patches | RX3 1.19 binary layout/hash and matched shim; optional tempo patch expects its stated input | `patch-player.py`, `patch-tempo25.py`, [tempo-range instructions](#preferred-bitedj-fourth-tempo-range) |
 
 Host paths and paths **inside the chroot** are different. Guest names such as
@@ -127,14 +127,14 @@ sudo apt update
 sudo apt install build-essential pkg-config libdrm-dev libfreetype-dev gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
 ```
 
-`xf86drm.h: No such file or directory` (from `drm-present.h`, including when
+`xf86drm.h: No such file or directory` (from `src/native/drm-present.h`, including when
 building `test-frame-exchange`) means the native libdrm development headers
 are missing or the compiler is not using their include flags. Check:
 
 ```sh
 pkg-config --cflags --libs freetype2 libdrm
 mkdir -p build
-gcc -O2 -o build/test-frame-exchange test-frame-exchange.c $(pkg-config --cflags --libs freetype2 libdrm)
+gcc -O2 -o build/test-frame-exchange tests/native/test-frame-exchange.c $(pkg-config --cflags --libs freetype2 libdrm)
 ./build/test-frame-exchange
 ```
 
@@ -146,14 +146,14 @@ separate steps; the repository is not yet a complete fresh-system installer.
 
 ```sh
 sh build.sh
-python3 test-navigation.py
-gcc -I . -o build/test-mixer-layout test-mixer-layout.c
+python3 tests/replay/test-navigation.py
+gcc -I . -o build/test-mixer-layout tests/native/test-mixer-layout.c
 ./build/test-mixer-layout
-gcc -O2 -o build/test-mixer-state test-mixer-state.c mixer-state.c
+gcc -O2 -o build/test-mixer-state tests/native/test-mixer-state.c src/native/mixer-state.c
 ./build/test-mixer-state
-gcc -O2 -o build/test-tempo-step test-tempo-step.c
+gcc -O2 -o build/test-tempo-step tests/native/test-tempo-step.c
 ./build/test-tempo-step
-gcc -O2 -o build/test-frame-exchange test-frame-exchange.c $(pkg-config --cflags --libs freetype2 libdrm)
+gcc -O2 -o build/test-frame-exchange tests/native/test-frame-exchange.c $(pkg-config --cflags --libs freetype2 libdrm)
 ./build/test-frame-exchange
 ```
 
@@ -215,4 +215,4 @@ Touch Search opens the native on-screen keyboard. Type a query, tap a result to 
 
 Build the current shim, then create a separate executable candidate with `python3 patch-tempo25.py ORIGINAL_RBP_PI OUTPUT_RBP_PI`. The input must be the unmodified-in-tempo RX3 v1.19 Pi executable; already-patched input is rejected. Stop RX3 before replacing its executable and shim together, and retain both originals for rollback. The script does not ship or download firmware. `build.sh` builds the shim but does not apply this separate executable patch.
 
-The fourth range becomes25%, including original counter artwork and hundredths tempo display. `generate-tempo25-label.py` and `generate-mixer-labels.py` regenerate label headers using ImageMagick and Liberation Sans. The native artwork hook checks the patched engine and snapshot tables, image dimensions and format before writing. Runtime status `rx3_tempo25_artwork_state` is1 after success, negative on validation failure. Use the matching executable and shim as a pair.
+The fourth range becomes25%, including original counter artwork and hundredths tempo display. `tools/glyphs/generate-tempo25-label.py` and `tools/glyphs/generate-mixer-labels.py` regenerate label headers using ImageMagick and Liberation Sans. The native artwork hook checks the patched engine and snapshot tables, image dimensions and format before writing. Runtime status `rx3_tempo25_artwork_state` is1 after success, negative on validation failure. Use the matching executable and shim as a pair.

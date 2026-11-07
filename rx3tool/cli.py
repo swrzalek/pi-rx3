@@ -49,7 +49,7 @@ def selftest(verbose=False):
     stage('Existing replay tests')
     for name in ('test-navigation.py', 'test-pad-mapping.py', 'test-held-pads.py', 'test-shift-jog.py',
                  'test-grid-jog.py', 'test-midi-reconnect.py', 'test-touch-recovery.py'):
-        code = subprocess.run([sys.executable, str(REPO / name)], cwd=str(REPO),
+        code = subprocess.run([sys.executable, str(REPO / 'tests/replay' / name)], cwd=str(REPO),
                               capture_output=not verbose).returncode
         say(f'  {"pass" if code == 0 else "FAIL"}  {name}')
         failures += code != 0

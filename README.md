@@ -1,6 +1,8 @@
-# RX3 on Raspberry Pi
+# pi-rx3
 
 Run the **embedded XDJ-RX3 1.19 player** with compatibility helpers on a Raspberry Pi 5. This is experimental software, not desktop rekordbox and not firmware you flash onto the Pi.
+
+This private working repository combines the setup workflow from [upstream PR #1](https://github.com/xsploit/rx3-pi/pull/1) and the display/FLX4 work from [PR #4](https://github.com/xsploit/rx3-pi/pull/4). Source history and [third-party notices](THIRD-PARTY-NOTICES.md) are preserved. No project-wide license has been identified; permission for broader reuse and redistribution remains unresolved.
 
 **Start here: use `./rx3` for setup and operation.** It replaces the old sequence of individual Python scripts with a checked recovery → runtime assembly → build → install workflow. You do not need a CDJ/RX3 or a device-specific encryption key. Official inputs are downloaded and verified locally; this repository does not distribute the player, firmware, keys or proprietary libraries.
 
@@ -28,11 +30,11 @@ sudo apt install git python3 python3-cryptography build-essential pkg-config \
   alsa-utils libasound2 fonts-dejavu-core sudo util-linux mount
 ```
 
-This setup is currently on the review branch; cloning `main` does not include it:
+Clone this private repository using an account with access:
 
 ```sh
-git clone --branch opus/human-friendly-setup https://github.com/xsploit/rx3-pi.git
-cd rx3-pi
+git clone https://github.com/swrzalek/pi-rx3.git
+cd pi-rx3
 ./rx3 config init
 ./rx3 doctor --stage recover --stage build
 ```
@@ -136,7 +138,7 @@ Recovery reuses verified files and resumes partial downloads. Assembly recognize
 
 | Symptom | Next step |
 | --- | --- |
-| `xf86drm.h: No such file or directory` in `drm-present.h` / `test-frame-exchange` | Install `libdrm-dev pkg-config libfreetype-dev`, then run `./rx3 build`. The build supplies the required pkg-config include flags; don't compile that test without them. |
+| `xf86drm.h: No such file or directory` in `src/native/drm-present.h` / `test-frame-exchange` | Install `libdrm-dev pkg-config libfreetype-dev`, then run `./rx3 build`. The build supplies the required pkg-config include flags; don't compile that test without them. |
 | `arm-linux-gnueabi-gcc` or ARM headers missing | Install `gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi libc6-dev-armel-cross linux-libc-dev`, then `./rx3 doctor --stage build`. |
 | Recovery says `Killed`, or stopped after key recovery | Run the same command again. `journalctl -k -b` can show an OOM kill; `Killed` alone does not establish why. Recovery streams the source archive and avoids holding the whole firmware in memory. |
 | Only `extracted/rx3.tar.bz2` exists | That's an intermediate output from the old script, not a runnable installation. Use `./rx3 setup --from /folder/with/original/zips`. |
@@ -151,9 +153,24 @@ Recovery reuses verified files and resumes partial downloads. Assembly recognize
 
 ## Existing installations and development notes
 
+### Repository layout
+
+| Location | Contents |
+| --- | --- |
+| `rx3`, `rx3tool/` | Supported setup, configuration, validation and launch CLI |
+| `src/native/` | C sources, headers, ARM assembly and linker maps |
+| `tests/` | Python unit tests, native tests, replays, integration and hardware checks |
+| `mappings/` | Controller profiles and their limitations |
+| `docs/` | Validation evidence, research notes and screenshots in `docs/images/` |
+| `tools/glyphs/` | Development tools that regenerate native UI glyph headers |
+| Root Python and shell scripts | Build commands, firmware utilities and compatibility entry points |
+| `build/`, `work/` | Ignored local build outputs, recovered inputs and runtime state |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development commands and [tests/README.md](tests/README.md) before running tests that need hardware. Historical notes describe earlier experiments and may contain machine-specific paths.
+
 Create a **new empty runtime directory** for this setup; don't point it at your hand-assembled rootfs. No automatic migration is attempted. Keep the old installation and its library/settings as a backup, and stop it using its original launcher before trying the new one. Do not run both at once.
 
-`recover-firmware.py`, `start-rx3.sh` and `stop-rx3.sh` are compatibility entry points to the new CLI. Other legacy experiments such as `prepare-runtime.py` and `prepare-library-view.sh` **are not part of this install path** and may retain historical machine assumptions. The complete old research README is preserved in [DEVELOPMENT-CHECKPOINT.md](DEVELOPMENT-CHECKPOINT.md); [VALIDATION.md](VALIDATION.md) records prior development evidence. Neither replaces the setup instructions above.
+`recover-firmware.py`, `start-rx3.sh` and `stop-rx3.sh` are compatibility entry points to the new CLI. Other legacy experiments such as `prepare-runtime.py` and `prepare-library-view.sh` **are not part of this install path** and may retain historical machine assumptions. The complete old research README is preserved in [docs/DEVELOPMENT-CHECKPOINT.md](docs/DEVELOPMENT-CHECKPOINT.md); [docs/VALIDATION.md](docs/VALIDATION.md) records prior development evidence. Neither replaces the setup instructions above.
 
 ## What still needs physical testing
 

@@ -2,7 +2,7 @@
 """Check the installed-script nudge quantum, reversal residuals and reset."""
 import importlib.util,tempfile
 from pathlib import Path
-s=importlib.util.spec_from_file_location('b',Path(__file__).with_name('flx6-rx3.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+s=importlib.util.spec_from_file_location('b',(Path(__file__).resolve().parents[2] / 'flx6-rx3.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 with tempfile.NamedTemporaryFile(mode='w') as f:
  f.write('<root/>');f.flush();events=[];b=m.Bridge(f.name,lambda *v:events.append(v))
  for ch in (1,2):

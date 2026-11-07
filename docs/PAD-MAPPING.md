@@ -50,7 +50,7 @@ BiteDJ's `lights.*.*Mode` entries describe LED output addresses. The XML does no
 
 Each deck now has Hot Cue, Beat Loop, Slip Loop and Beat Jump buttons directly above its eight pads. Tap a different mode to select its first bank; tap the selected mode again to switch banks. Blue shows the selected mode and a `2` identifies its second bank. The highlight follows actual native state, including bank changes from MIDI. Mode selectors hide in Browse and while the mixer is open.
 
-![Native touch mode selectors with second banks selected](native-pad-modes.png)
+![Native touch mode selectors with second banks selected](images/native-pad-modes.png)
 
 All four selectors and both banks were verified by touch replay on both decks. Touch-only Beat Jump forward/back and four-beat loop on/off also passed. Physical finger testing and the full set of secondary-bank pad actions remain pending.
 
@@ -70,7 +70,7 @@ Touch replay on mode6 pad4 (Mute) silences the playing deck while held and resto
 
 The native player refuses a bank change while a touchscreen Slip Loop or Release FX Mute pad is held. Previously, the adapter suppressed the rejected MIDI press but forwarded its later NoteOff. If both inputs used the same pad key, that release ended the touchscreen action early.
 
-`pad-intent.h` now records which tagged MIDI presses the adapter forwarded, by deck, pad and bank. A release requires matching ownership; rejected presses produce no native release. Duplicate presses are suppressed, and a later native bank change prevents an old release from reaching another bank. All ownership changes happen on the FIFO reader thread.
+`src/native/pad-intent.h` now records which tagged MIDI presses the adapter forwarded, by deck, pad and bank. A release requires matching ownership; rejected presses produce no native release. Duplicate presses are suppressed, and a later native bank change prevents an old release from reaching another bank. All ownership changes happen on the FIFO reader thread.
 
 Live before/after tests covered held one-beat Slip Loop and Mute on both decks, with a conflicting Beat Jump MIDI press/release on the same native key. Before the fix, all four MIDI releases ended the touch action early. After the fix, the touch action stayed held until actual touch release, then playback/audio recovered. This does not implement general source ownership when touch and MIDI press the same pad in the same bank; that overlap and physical input testing remain pending.
 

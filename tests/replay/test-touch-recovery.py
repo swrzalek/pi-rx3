@@ -2,7 +2,7 @@
 """Run the actual C bridge against evdev replay, testing native release output."""
 import os,struct,subprocess,tempfile,time
 from pathlib import Path
-source=Path(__file__).resolve().parent
+source=Path(__file__).resolve().parents[2] / 'src/native'
 EV=struct.Struct('@llHHi');REPORT=struct.Struct('<BBHH')
 def event(t,c,v):return EV.pack(0,0,t,c,v)
 def contact():

@@ -46,4 +46,4 @@ s+='static const unsigned short tempo_pickup_text[][4]={\n'
 for value,label in ((0,'FADER %'),(1,'MATCH\nFASTER'),(2,'MATCH\nSLOWER'),(3,'MATCH\nFADER')):
  for x,y,w in spans(label,68,32,12):s+='{%d,%d,%d,%d},\n'%(value,x,y,w)
 s+='};\n'
-Path(__file__).with_name('native-mixer-glyphs.h').write_text(s)
+(Path(__file__).resolve().parents[2] / 'src/native/native-mixer-glyphs.h').write_text(s)
