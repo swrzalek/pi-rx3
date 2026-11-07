@@ -37,8 +37,8 @@
 
 ### Task 3: Publish a private reviewable PR
 
-- [ ] Push the preserved combined source history as `main` to the empty private repository, then push the organization branch.
-- [ ] Open a PR describing the before/after organization, preserved commands, validation results and remaining platform limits. Do not merge.
+- [x] Push the preserved combined source history as `main` to the empty private repository, then push the organization branch.
+- [x] Open a PR describing the before/after organization, preserved commands, validation results and remaining platform limits. Do not merge.
 
 ## Validation record
 
@@ -47,3 +47,5 @@
 - All 60 native source and C test files are byte-for-byte moves; root entries dropped from 114 to 28.
 - Full selftest still fails on this Mac: missing `cryptography`, two existing Linux path assumptions, missing Linux touch headers and libdrm build dependencies. An additional audio-handles compile needs Linux `EBADFD`. No physical hardware or ARM32 runtime validation was run.
 - Independent review found missing include flags in moved documentation examples; these were corrected to `-I src/native`.
+
+Private review PR: https://github.com/swrzalek/pi-rx3/pull/1 (opened, not merged).
