@@ -134,7 +134,7 @@ are missing or the compiler is not using their include flags. Check:
 ```sh
 pkg-config --cflags --libs freetype2 libdrm
 mkdir -p build
-gcc -O2 -o build/test-frame-exchange tests/native/test-frame-exchange.c $(pkg-config --cflags --libs freetype2 libdrm)
+gcc -I src/native -O2 -o build/test-frame-exchange tests/native/test-frame-exchange.c $(pkg-config --cflags --libs freetype2 libdrm)
 ./build/test-frame-exchange
 ```
 
@@ -147,13 +147,13 @@ separate steps; the repository is not yet a complete fresh-system installer.
 ```sh
 sh build.sh
 python3 tests/replay/test-navigation.py
-gcc -I . -o build/test-mixer-layout tests/native/test-mixer-layout.c
+gcc -I src/native -o build/test-mixer-layout tests/native/test-mixer-layout.c
 ./build/test-mixer-layout
-gcc -O2 -o build/test-mixer-state tests/native/test-mixer-state.c src/native/mixer-state.c
+gcc -I src/native -O2 -o build/test-mixer-state tests/native/test-mixer-state.c src/native/mixer-state.c
 ./build/test-mixer-state
-gcc -O2 -o build/test-tempo-step tests/native/test-tempo-step.c
+gcc -I src/native -O2 -o build/test-tempo-step tests/native/test-tempo-step.c
 ./build/test-tempo-step
-gcc -O2 -o build/test-frame-exchange tests/native/test-frame-exchange.c $(pkg-config --cflags --libs freetype2 libdrm)
+gcc -I src/native -O2 -o build/test-frame-exchange tests/native/test-frame-exchange.c $(pkg-config --cflags --libs freetype2 libdrm)
 ./build/test-frame-exchange
 ```
 

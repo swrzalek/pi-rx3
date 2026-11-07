@@ -1,5 +1,7 @@
 > Current status: recovery is now integrated into build.sh and deployed. The final section records the live FLX6 driver-loss test. Earlier “not deployed” sections are development history.
 
+Run command examples from the repository root.
+
 # Audio recovery investigation
 
 Status: the pair-reopen controller and ALSA parameter driver are implemented and tested in isolation; live reconnect is not integrated or verified. This is distinct from the working MIDI rediscovery loop. The live player was left running and paused; no USB device was detached and no native audio error was injected.
@@ -41,7 +43,7 @@ The caller must serialize writes, close and controller operations. Driver callba
 Local test:
 
 ```sh
-gcc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined -o /tmp/test-audio-recovery src/native/audio-recovery.c tests/native/test-audio-recovery.c
+gcc -I src/native -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined -o /tmp/test-audio-recovery src/native/audio-recovery.c tests/native/test-audio-recovery.c
 /tmp/test-audio-recovery
 ```
 
@@ -56,7 +58,7 @@ Next integrate a driver that saves/restores real ALSA parameters, resolves stabl
 These tests used the host ALSA libraries, not the ARM32 firmware runtime or the FLX6/dmix hardware chain. Null PCM accepting writes is not evidence of audible output or USB reconnect. Neither recovery source is linked into the live shim yet. Outstanding integration: stable caller-handle lookup, complete call interception and serialization, write-error classification, bounded underrun/suspend handling, offline pacing/status, live wrapper validation, then real routed-output recovery tests. The isolated ARM32 shared-library check below now passes.
 
 ```sh
-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o /tmp/test-audio-alsa src/native/audio-recovery.c src/native/audio-handles.c src/native/audio-alsa.c tests/native/test-audio-alsa.c $(pkg-config --cflags --libs alsa) -ldl
+gcc -I src/native -std=gnu11 -O2 -Wall -Wextra -Werror -o /tmp/test-audio-alsa src/native/audio-recovery.c src/native/audio-handles.c src/native/audio-alsa.c tests/native/test-audio-alsa.c $(pkg-config --cflags --libs alsa) -ldl
 /tmp/test-audio-alsa
 ```
 

@@ -21,9 +21,9 @@
 
 **Interfaces:** Existing build outputs and CLI commands remain unchanged. Native compiler commands receive `-I src/native`; Python replay scripts locate the root through `Path(__file__).resolve().parents[2]`.
 
-- [ ] Move tracked files by category, leaving Python runtime entry points in place.
-- [ ] Update source paths in `build.sh`, `build-audio-candidate.sh`, integration shell scripts, replay scripts and `rx3tool/cli.py`. Resolve integration script working directories to the repository root.
-- [ ] Verify Python syntax, shell syntax, FLX4 tests, six portable replay suites and portable native tests. Record Linux-only checks that cannot run on macOS.
+- [x] Move tracked files by category, leaving Python runtime entry points in place.
+- [x] Update source paths in `build.sh`, `build-audio-candidate.sh`, integration shell scripts, replay scripts and `rx3tool/cli.py`. Resolve integration script working directories to the repository root.
+- [x] Verify Python syntax, shell syntax, FLX4 tests, six portable replay suites and portable native tests. Record Linux-only checks that cannot run on macOS.
 
 ### Task 2: Organize documentation and development tools
 
@@ -31,11 +31,19 @@
 
 **Interfaces:** Glyph generators write to `src/native/` using paths relative to their own files, regardless of the caller's working directory. Root `THIRD-PARTY-NOTICES.md` remains discoverable.
 
-- [ ] Move files and update generator output locations and documentation paths.
-- [ ] Replace the obsolete upstream review-branch clone instructions with this private repository's main branch; document the folder map and contributor commands.
-- [ ] Check local Markdown links, inspect the diff, and request independent review.
+- [x] Move files and update generator output locations and documentation paths.
+- [x] Replace the obsolete upstream review-branch clone instructions with this private repository's main branch; document the folder map and contributor commands.
+- [x] Check local Markdown links, inspect the diff, and request independent review.
 
 ### Task 3: Publish a private reviewable PR
 
 - [ ] Push the preserved combined source history as `main` to the empty private repository, then push the organization branch.
 - [ ] Open a PR describing the before/after organization, preserved commands, validation results and remaining platform limits. Do not merge.
+
+## Validation record
+
+- Python syntax (41 files), shell syntax, local Markdown links and CLI help passed.
+- Three FLX4 unit tests, six replay suites (also invoked from outside the checkout) and eight portable native tests passed.
+- All 60 native source and C test files are byte-for-byte moves; root entries dropped from 114 to 28.
+- Full selftest still fails on this Mac: missing `cryptography`, two existing Linux path assumptions, missing Linux touch headers and libdrm build dependencies. An additional audio-handles compile needs Linux `EBADFD`. No physical hardware or ARM32 runtime validation was run.
+- Independent review found missing include flags in moved documentation examples; these were corrected to `-I src/native`.
