@@ -20,3 +20,7 @@ rx3-rootfs/
 *.partial
 *.tar.gz
 *.tar.bz2
+
+# Local development tooling
+/.venv/
+/.ruff_cache/
