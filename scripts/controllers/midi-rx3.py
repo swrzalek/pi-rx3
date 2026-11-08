@@ -14,13 +14,123 @@ ANALOG={'pregain':0x5019,'parameter3':0x501a,'parameter2':0x501b,'parameter1':0x
  'volume':0x501e,'super1':0x509d,'crossfader':0x6017,'headMix':0x4405}
 PAD_BANKS={"pad-hotcue":0,"pad-beatloop":1,"pad-beatjump":3}
 LOOP_SIZES=("0.25","0.5","1","2","4","8","16","32")
-class Bridge:
+FX_BINDINGS = {'fx_select':(0x448b,'fx-select'),'fx_previous':(0x448b,'fx-previous'),
+       'fx_beat_prev':(0x4490,'fx-button'),'fx_beat_next':(0x4491,'fx-button'),
+       'fx_toggle':(0x448d,'fx-button'),'fx_depth':(0x448f,'analog'),
+       'fx_channel1':(0x448c,'fx-channel1'),'fx_channel2':(0x448c,'fx-channel2')}
+
+HANDLERS = {
+ 'fx-channel1': 'handle_fx_channel',
+ 'fx-channel2': 'handle_fx_channel',
+ 'fx-select': 'handle_fx_button',
+ 'fx-previous': 'handle_fx_button',
+ 'fx-button': 'handle_fx_button',
+ 'prepare-view': 'handle_prepare',
+ 'prepare-toggle': 'handle_prepare',
+ 'browse-push': 'handle_browse_push',
+ 'view': 'handle_navigation',
+ 'back': 'handle_navigation',
+ 'shift': 'handle_shift',
+ 'grid-jog': 'handle_grid',
+ 'jog': 'handle_jog',
+ 'pad-hotcue': 'handle_pad',
+ 'pad-beatloop': 'handle_pad',
+ 'pad-beatjump': 'handle_pad',
+ 'button': 'handle_button',
+ 'waveform-zoom': 'handle_zoom',
+ 'relative': 'handle_relative',
+ 'msb': 'handle_msb',
+ 'tempo-msb': 'handle_msb',
+ 'tempo-lsb': 'handle_tempo_lsb',
+ 'lsb': 'handle_lsb',
+ 'analog': 'handle_analog',
+}
+
+class MidiHandlers:
+ """Stateful control behaviors, independent of byte parsing and XML loading."""
+ def handle_fx_channel(self,key,ch,mode,status,note,value):
+  self.fx_channels[1 if mode=='fx-channel1' else 2]=bool(value)
+  self.fx_route_due=self.clock()+.02
+ def handle_fx_button(self,key,ch,mode,status,note,value):
+  identity=(key,0)
+  if value and identity not in self.held:
+   self.held.add(identity)
+   if mode=='fx-button':self.emit(key,0,0,0,0.,0)
+   else:self.emit(key,5,0,-1 if mode=='fx-previous' else 1,0.,0x4658)
+  elif not value and identity in self.held:
+   self.held.discard(identity)
+   if mode=='fx-button':self.emit(key,2,0,0,0.,0)
+ def handle_prepare(self,key,ch,mode,status,note,value):
+  if value:self.emit(key,0,ch,0,0.,0x4254 if mode=='prepare-view' else 0x4251)
+ def handle_browse_push(self,key,ch,mode,status,note,value):
+  if value:self.emit(key,0,ch,0,0.,0x4250)
+ def handle_navigation(self,key,ch,mode,status,note,value):
+  if value:self.emit(key,0,ch,0,0.,0x4256 if mode=='view' else 0x424b)
+ def handle_shift(self,key,ch,mode,status,note,value):
+  down=bool(value);self.shift[ch]=down
+  self.grid_ticks[ch]=0
+  if down:
+   self.stop_jog(ch)
+   if (0x4306,ch) in self.held:
+    self.emit(0x4306,2,ch,0,0.,0);self.held.discard((0x4306,ch))
+  if down:self.held.add((key,ch))
+  else:self.held.discard((key,ch))
+  self.emit(key,0 if down else 2,ch,0,0.,0)
+ def handle_grid(self,key,ch,mode,status,note,value):
+  self.grid_jog(ch,value)
+ def handle_jog(self,key,ch,mode,status,note,value):
+  if self.shift[ch]:self.grid_jog(ch,value);return
+  j=self.jogs[ch];delta=value-64
+  if delta:j['delta']+=delta;j['total']+=delta;j['moved']=self.clock()
+ def handle_pad(self,key,ch,mode,status,note,value):
+  bank=PAD_BANKS[mode];identity=(key,ch)
+  if value:
+   if self.pad_held.get(identity)==bank:return
+   # Release the old bank before selecting another. Each deck is independent.
+   for (old_key,old_ch),old_bank in list(self.pad_held.items()):
+    if old_ch==ch and old_bank!=bank:
+     self.emit(old_key,2,ch,0,0.,0x5040|old_bank)
+     del self.pad_held[(old_key,ch)];self.held.discard((old_key,ch))
+   self.pad_held[identity]=bank;self.held.add(identity)
+   self.emit(key,0,ch,0,0.,0x5040|bank)
+  elif self.pad_held.get(identity)==bank:
+   del self.pad_held[identity];self.held.discard(identity)
+   self.emit(key,2,ch,0,0.,0x5040|bank)
+ def handle_button(self,key,ch,mode,status,note,value):
+  op=0 if value else 2
+  if key==0x4306 and self.shift[ch]:return
+  if key==0x4306 and op==2:self.stop_jog(ch)
+  if op==0:self.held.add((key,ch))
+  else:self.held.discard((key,ch))
+  self.emit(key,op,ch,0,0.,0)
+ def handle_zoom(self,key,ch,mode,status,note,value):
+  if value in (1,127):self.emit(key,4,0,1 if value==127 else -1,0.,0x425a)
+ def handle_relative(self,key,ch,mode,status,note,value):
+  delta=value if value<64 else value-128
+  if delta:self.emit(key,4,ch,delta,0.,0x4252) # browser-only encoder intent
+ def handle_msb(self,key,ch,mode,status,note,value):
+  self.msb[(status,note)]=value
+ def handle_tempo_lsb(self,key,ch,mode,status,note,value):
+  hi=self.msb.get((status,note-32))
+  if hi is not None:self.emit(key,5,ch,0,((hi<<7)|value)/8192.-1.,0x544d)
+ def handle_lsb(self,key,ch,mode,status,note,value):
+  hi=self.msb.get((status,note-32))
+  if hi is not None:self.emit(key,4,ch,0,((hi<<7)|value)/16383.,0)
+ def handle_analog(self,key,ch,mode,status,note,value):
+  self.emit(key,4,ch,0,value/127.,0)
+
+class Bridge(MidiHandlers):
  def __init__(self,xml,emit,clock=time.monotonic):
   self.clock=clock;self.jogs={ch:dict(total=0,delta=0,last=clock(),moved=0,speed=0) for ch in (1,2)}
   self.emit=emit;self.mapping={};self.msb={};self.held=set();self.pad_held={};self.status=None;self.data=[]
   self.shift={1:False,2:False}
   self.grid_ticks={1:0,2:0}
   self.fx_channels={1:False,2:False};self.fx_route_due=None
+  self._load_profile(xml)
+  # Bind once during setup: no mode classification in the message path.
+  self.handlers={mode:getattr(self,name) for mode,name in HANDLERS.items()}
+ def _load_profile(self,xml):
+  """Compile the controller XML into native control bindings."""
   root=ET.parse(xml).getroot()
   self.flx4=any(c.get('id')=='DDJ-FLX4' for c in root.findall('.//controller'))
   # Mixxx's FLX4 script declares 720 ticks/revolution; keep FLX6 behavior.
@@ -39,11 +149,7 @@ class Bridge:
          'PioneerDDJFLX6.toggleQuantize':'quantize',
          'MoveVertical':'PioneerDDJFLX6.browseRotate'}.get(key,key)
    mode='button';native=BUTTONS.get(key)
-   fx={'fx_select':(0x448b,'fx-select'),'fx_previous':(0x448b,'fx-previous'),
-       'fx_beat_prev':(0x4490,'fx-button'),'fx_beat_next':(0x4491,'fx-button'),
-       'fx_toggle':(0x448d,'fx-button'),'fx_depth':(0x448f,'analog'),
-       'fx_channel1':(0x448c,'fx-channel1'),'fx_channel2':(0x448c,'fx-channel2')}
-   if self.flx4 and key in fx:native,mode=fx[key]
+   if self.flx4 and key in FX_BINDINGS:native,mode=FX_BINDINGS[key]
 
    if key=='PioneerDDJFLX6.shiftPressed':mode='shift'
    if g=='[Tab]' and key in ('library','PioneerDDJFLX6.viewPressed'):native=0x202;mode='view'
@@ -80,74 +186,7 @@ class Bridge:
   item=self.mapping.get((status,note))
   if not item:return
   key,ch,mode=item
-  if mode.startswith('fx-channel'):
-   self.fx_channels[1 if mode=='fx-channel1' else 2]=bool(value)
-   self.fx_route_due=self.clock()+.02
-  elif mode in ('fx-select','fx-previous','fx-button'):
-   identity=(key,0)
-   if value and identity not in self.held:
-    self.held.add(identity)
-    if mode=='fx-button':self.emit(key,0,0,0,0.,0)
-    else:self.emit(key,5,0,-1 if mode=='fx-previous' else 1,0.,0x4658)
-   elif not value and identity in self.held:
-    self.held.discard(identity)
-    if mode=='fx-button':self.emit(key,2,0,0,0.,0)
-  elif mode in ('prepare-view','prepare-toggle'):
-
-   if value:self.emit(key,0,ch,0,0.,0x4254 if mode=='prepare-view' else 0x4251)
-  elif mode=='browse-push':
-   if value:self.emit(key,0,ch,0,0.,0x4250)
-  elif mode in ('view','back'):
-   if value:self.emit(key,0,ch,0,0.,0x4256 if mode=='view' else 0x424b)
-  elif mode=='shift':
-   down=bool(value);self.shift[ch]=down
-   self.grid_ticks[ch]=0
-   if down:
-    self.stop_jog(ch)
-    if (0x4306,ch) in self.held:
-     self.emit(0x4306,2,ch,0,0.,0);self.held.discard((0x4306,ch))
-   if down:self.held.add((key,ch))
-   else:self.held.discard((key,ch))
-   self.emit(key,0 if down else 2,ch,0,0.,0)
-  elif mode=='grid-jog':self.grid_jog(ch,value)
-  elif mode=='jog':
-   if self.shift[ch]:self.grid_jog(ch,value);return
-   j=self.jogs[ch];delta=value-64
-   if delta:j['delta']+=delta;j['total']+=delta;j['moved']=self.clock()
-  elif mode in PAD_BANKS:
-   bank=PAD_BANKS[mode];identity=(key,ch)
-   if value:
-    if self.pad_held.get(identity)==bank:return
-    # Release the old bank before selecting another. Each deck is independent.
-    for (old_key,old_ch),old_bank in list(self.pad_held.items()):
-     if old_ch==ch and old_bank!=bank:
-      self.emit(old_key,2,ch,0,0.,0x5040|old_bank)
-      del self.pad_held[(old_key,ch)];self.held.discard((old_key,ch))
-    self.pad_held[identity]=bank;self.held.add(identity)
-    self.emit(key,0,ch,0,0.,0x5040|bank)
-   elif self.pad_held.get(identity)==bank:
-    del self.pad_held[identity];self.held.discard(identity)
-    self.emit(key,2,ch,0,0.,0x5040|bank)
-  elif mode=='button':
-   op=0 if value else 2
-   if key==0x4306 and self.shift[ch]:return
-   if key==0x4306 and op==2:self.stop_jog(ch)
-   if op==0:self.held.add((key,ch))
-   else:self.held.discard((key,ch))
-   self.emit(key,op,ch,0,0.,0)
-  elif mode=='waveform-zoom':
-   if value in (1,127):self.emit(key,4,0,1 if value==127 else -1,0.,0x425a)
-  elif mode=='relative':
-   delta=value if value<64 else value-128
-   if delta:self.emit(key,4,ch,delta,0.,0x4252) # browser-only encoder intent
-  elif mode in ('msb','tempo-msb'):self.msb[(status,note)]=value
-  elif mode=='tempo-lsb':
-   hi=self.msb.get((status,note-32))
-   if hi is not None:self.emit(key,5,ch,0,((hi<<7)|value)/8192.-1.,0x544d)
-  elif mode=='lsb':
-   hi=self.msb.get((status,note-32))
-   if hi is not None:self.emit(key,4,ch,0,((hi<<7)|value)/16383.,0)
-  else:self.emit(key,4,ch,0,value/127.,0)
+  self.handlers[mode](key,ch,mode,status,note,value)
  def feed(self,data):
   for b in data:
    if b>=0xf8:continue

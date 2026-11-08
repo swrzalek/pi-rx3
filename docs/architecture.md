@@ -26,3 +26,18 @@ The runtime owns emulated devices, patched player/libraries and a local writable
 - `tools/glyphs/` generates checked-in headers. Tests live under `tests/`; [key codes](reference/keycodes.txt) and screenshots in `docs/images/` are reference material.
 
 Long chronological research diaries were removed from the current docs during cleanup; the original files remain available in Git history. Current operating instructions live only in [setup](setup.md), and evidence/unfinished work in [validation](validation.md).
+
+## MIDI dispatch
+
+The bridge compiles FLX4/FLX6 XML profiles once at startup. `Bridge.feed`
+parses MIDI bytes; `Bridge.message` normalizes NoteOff and dispatches to a
+bound handler by mode. `MidiHandlers` keeps buttons, jogs, pads, analog input,
+14-bit values and FX behavior separate. Stateful ownership and disconnect
+cleanup remain shared by the bridge. Profile classification is outside the
+message path; no per-message file access, sleeps or threads were added.
+
+To compare a saved earlier bridge with the current implementation, run
+`python3 tools/benchmark-midi.py /path/to/baseline-midi.py`. It first compares
+emitted commands for a deterministic mixed replay, then reports median Python
+dispatch time for jog, depth and FX button messages. This does not measure USB,
+queue delivery, Pi scheduling or audible latency; those require hardware.
