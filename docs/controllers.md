@@ -24,8 +24,25 @@ mapping = mappings/Pioneer-DDJ-FLX4.rx3.xml
 
 The shipped [profile](../mappings/Pioneer-DDJ-FLX4.rx3.xml) uses 720 jog ticks/revolution. It covers both decks' load/play/cue, loops, sync/leader, quantize, tempo/range and jog; browsing/zoom; gain/EQ/filter/faders/crossfader/headphone controls; hot cues, beat loops and default beat-jump pads. Shift+jog keeps the bridge's grid-edit behavior. FLX6 resolution and behavior are unchanged.
 
-The FLX4 bridge sends headphone CUE LED feedback for both channels from the native mixer input snapshot. Updates include touchscreen actions and are resent after MIDI output reconnection. Other LEDs remain unsupported. MIDI output failures leave input handling active. The snapshot tracks dispatched actions rather than audio-engine acknowledgements.
+The FLX4 bridge sends headphone CUE LED feedback for both channels from the native mixer input snapshot. Updates include touchscreen actions and are resent after MIDI output reconnection. Beat FX On/Off feedback is described below; other LEDs remain unsupported. MIDI output failures leave input handling active. The snapshot tracks dispatched actions rather than audio-engine acknowledgements.
 
-Not covered: other LED feedback, sampler, Pad FX/Beat FX, smart functions, memory-cue navigation, jog loop-end adjustment, hot-cue deletion, beat-jump size selection or exact rekordbox acceleration. Physical retesting is required, especially deck 2, master/headphone routing and touch alignment.
+Not covered: other LED feedback, sampler, Pad FX, smart functions, memory-cue navigation, jog loop-end adjustment, hot-cue deletion, beat-jump size selection or exact rekordbox acceleration. Physical retesting is required, especially deck 2, master/headphone routing and touch alignment.
 
 Reference MIDI addresses: [Mixxx FLX4 XML](https://github.com/mixxxdj/mixxx/blob/2.5/res/controllers/Pioneer-DDJ-FLX4.midi.xml); jog encoding: [Mixxx FLX4 script](https://github.com/mixxxdj/mixxx/blob/2.5/res/controllers/Pioneer-DDJ-FLX4-script.js). The profile is an RX3 input mapping, not a complete Mixxx preset.
+
+## FLX4 Beat FX
+
+FX Select cycles through RX3's native effect list; Shift + Select goes backward.
+Beat `<` / `>` changes the native beat setting. Level/Depth covers 0 to full
+scale. The channel selector routes to deck 1, deck 2 or master (1+2).
+On/Off toggles once per press and its LED blinks at 2 Hz while native FX is on.
+Release FX and Shift + On/Off are not mapped. Existing settings remain until
+controller messages arrive. Native verification details are in
+[Beat FX adapter evidence](reference/beat-fx.md).
+
+After updating, stop RX3, run `./rx3 build` and `./rx3 install`, then restart.
+Test with distinguishable tracks on both decks: verify selection in both
+directions, beat limits, depth endpoints, each routing position, and the LED
+while enabled/disabled. Toggle FX on screen, restart the MIDI bridge, and
+reconnect the controller to check feedback resynchronization. Physical testing
+is still required before considering these controls validated.

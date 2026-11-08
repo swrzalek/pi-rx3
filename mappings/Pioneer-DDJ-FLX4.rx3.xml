@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <MixxxControllerPreset mixxxVersion="2.5" schemaVersion="1">
-  <!-- RX3 input-only profile. MIDI addresses checked against Mixxx 2.5 Pioneer-DDJ-FLX4.midi.xml; jog resolution against Pioneer-DDJ-FLX4-script.js. No JavaScript runtime or LED output. -->
+  <!-- RX3 input-only profile. MIDI addresses checked against Mixxx 2.5 Pioneer-DDJ-FLX4.midi.xml; jog resolution against Pioneer-DDJ-FLX4-script.js. No JavaScript runtime; headphone CUE and Beat FX LED output is handled by the bridge. -->
   <info>
     <name>Pioneer DDJ-FLX4 RX3 input</name>
   </info>
@@ -888,6 +888,15 @@
         <midino>0x27</midino>
         <options />
       </control>
+    <control><group>[Master]</group><key>fx_select</key><status>0x94</status><midino>0x63</midino><options /></control>
+<control><group>[Master]</group><key>fx_previous</key><status>0x94</status><midino>0x64</midino><options /></control>
+<control><group>[Master]</group><key>fx_beat_prev</key><status>0x94</status><midino>0x4a</midino><options /></control>
+<control><group>[Master]</group><key>fx_beat_next</key><status>0x94</status><midino>0x4b</midino><options /></control>
+<control><group>[Master]</group><key>fx_toggle</key><status>0x94</status><midino>0x47</midino><options /></control>
+<control><group>[Master]</group><key>fx_toggle</key><status>0x95</status><midino>0x47</midino><options /></control>
+<control><group>[Master]</group><key>fx_depth</key><status>0xb4</status><midino>0x2</midino><options /></control>
+<control><group>[Master]</group><key>fx_channel1</key><status>0x94</status><midino>0x10</midino><options /></control>
+<control><group>[Master]</group><key>fx_channel2</key><status>0x95</status><midino>0x11</midino><options /></control>
     </controls>
   </controller>
 </MixxxControllerPreset>

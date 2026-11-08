@@ -23,7 +23,9 @@ class CueTests(unittest.TestCase):
             def sleep(_):
                 path.write_bytes(b'\x02\x00\x00\x00')
             bridge.cue_feedback(lib, lambda: next(running), lambda: ['hw:1,0,0'], path, sleep)
-            packets = [call.args[1] for call in lib.snd_rawmidi_write.call_args_list]
+            all_packets = [call.args[1] for call in lib.snd_rawmidi_write.call_args_list]
+            packets = [packet for packet in all_packets if packet[1] == 0x54]
+            self.assertEqual([p for p in all_packets if p[1] == 0x47], [b'\x94\x47\x00', b'\x94\x47\x00'])
             self.assertEqual(packets, [b'\x90\x54\x7f', b'\x91\x54\x00',
                                        b'\x90\x54\x00', b'\x91\x54\x7f',
                                        b'\x90\x54\x00', b'\x91\x54\x00'])

@@ -63,6 +63,22 @@ static void *control_thread(void *unused){
  struct command c;unsigned have=0;struct pad_intents pads={0};
  for(;;){int n=read(fd,(char*)&c+have,sizeof(c)-have);if(n<=0){sleep(1);continue;}have+=n;if(have<sizeof(c))continue;have=0;
   if(c.key<0||c.key>65535||c.operation<0||c.operation>15||c.channel<0||c.channel>2)continue;
+  if(c.key==0x448b&&c.operation==5&&c.extra==0x4658){
+   /* Read the UI selection: engine type becomes OFF while FX is disabled. */
+   void *root=*(void *volatile *)0x026867c0;
+   void *mixer=root?*(void **)((char*)root+0x50):0;
+   void *master=mixer?*(void **)((char*)mixer+0xa8):0;
+   int index=master?*(volatile int *)((char*)master+0x3c):-1;
+   if(index<0||index>=14)continue;
+   int target=(index+(c.value<0?13:1))%14;
+   sendkey(manager,0x448b,5,0,target,0.f,0);
+   /* Queue delivery is asynchronous. Preserve consecutive relative selections. */
+   for(int tries=0;tries<20;tries++){
+    if(*(volatile int *)((char*)master+0x3c)==target)break;
+    usleep(5000);
+   }
+   continue;
+  }
   if(c.key==0&&c.operation==4&&c.extra==0x4744){rx3_grid_enqueue(c.channel,c.value);continue;}
   if((c.extra&~7)==0x5040&&c.key>=0x4117&&c.key<=0x411e&&(c.operation==0||c.operation==2)){
    if(forward_pad_intent(&pads,c.key,c.operation,c.channel,c.extra&7,manager,pad_accept,pad_mode,pad_emit)<0){

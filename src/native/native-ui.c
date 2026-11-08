@@ -1,3 +1,4 @@
+#include <fcntl.h>
 /* RX3 v1.19 native DS_GR transport strip. GUI-thread rendering only. */
 #include <stdint.h>
 #include <string.h>
@@ -86,7 +87,17 @@ static int paint(int navigation,int show){
  s->painted=1;s->last_pressed=pressed;s->last_tag_list=tag_list;
  return 1;
 }
+/* Snapshot of native FX state, not a locally inferred button toggle. */
+static void publish_fx(void){
+ static int frames;
+ if(++frames%6)return;
+ void *engine=*(void *volatile *)0x0268617c;if(!engine)return;
+ uint32_t state=((int(*)(void*))0x4d1bc)(engine)?1:0;
+ int fd=open("/dev/rx3-fx-state",O_WRONLY|O_NONBLOCK);
+ if(fd>=0){(void)write(fd,&state,sizeof(state));close(fd);}
+}
 static int draw(void *arg){
+ publish_fx();
  rx3_tempo25_artwork_tick();
  int result=original_draw(arg);rx3_touch_navigation_tick();rx3_grid_tick();
  int main=main_panel_visible(),show=player_screen_active();

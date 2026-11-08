@@ -20,6 +20,7 @@ class Bridge:
   self.emit=emit;self.mapping={};self.msb={};self.held=set();self.pad_held={};self.status=None;self.data=[]
   self.shift={1:False,2:False}
   self.grid_ticks={1:0,2:0}
+  self.fx_channels={1:False,2:False};self.fx_route_due=None
   root=ET.parse(xml).getroot()
   self.flx4=any(c.get('id')=='DDJ-FLX4' for c in root.findall('.//controller'))
   # Mixxx's FLX4 script declares 720 ticks/revolution; keep FLX6 behavior.
@@ -38,6 +39,12 @@ class Bridge:
          'PioneerDDJFLX6.toggleQuantize':'quantize',
          'MoveVertical':'PioneerDDJFLX6.browseRotate'}.get(key,key)
    mode='button';native=BUTTONS.get(key)
+   fx={'fx_select':(0x448b,'fx-select'),'fx_previous':(0x448b,'fx-previous'),
+       'fx_beat_prev':(0x4490,'fx-button'),'fx_beat_next':(0x4491,'fx-button'),
+       'fx_toggle':(0x448d,'fx-button'),'fx_depth':(0x448f,'analog'),
+       'fx_channel1':(0x448c,'fx-channel1'),'fx_channel2':(0x448c,'fx-channel2')}
+   if self.flx4 and key in fx:native,mode=fx[key]
+
    if key=='PioneerDDJFLX6.shiftPressed':mode='shift'
    if g=='[Tab]' and key in ('library','PioneerDDJFLX6.viewPressed'):native=0x202;mode='view'
    if g=='[Library]' and key=='MoveFocusForward':native=0x420c;mode='browse-push'
@@ -73,7 +80,20 @@ class Bridge:
   item=self.mapping.get((status,note))
   if not item:return
   key,ch,mode=item
-  if mode in ('prepare-view','prepare-toggle'):
+  if mode.startswith('fx-channel'):
+   self.fx_channels[1 if mode=='fx-channel1' else 2]=bool(value)
+   self.fx_route_due=self.clock()+.02
+  elif mode in ('fx-select','fx-previous','fx-button'):
+   identity=(key,0)
+   if value and identity not in self.held:
+    self.held.add(identity)
+    if mode=='fx-button':self.emit(key,0,0,0,0.,0)
+    else:self.emit(key,5,0,-1 if mode=='fx-previous' else 1,0.,0x4658)
+   elif not value and identity in self.held:
+    self.held.discard(identity)
+    if mode=='fx-button':self.emit(key,2,0,0,0.,0)
+  elif mode in ('prepare-view','prepare-toggle'):
+
    if value:self.emit(key,0,ch,0,0.,0x4254 if mode=='prepare-view' else 0x4251)
   elif mode=='browse-push':
    if value:self.emit(key,0,ch,0,0.,0x4250)
@@ -152,6 +172,10 @@ class Bridge:
   j=self.jogs[ch];self.emit(0x4305,4,ch,0,0.,self.pulse(ch));j['delta']=0;j['speed']=0;j['last']=self.clock()
  def tick(self):
   now=self.clock()
+  if self.fx_route_due is not None and now>=self.fx_route_due:
+   left,right=self.fx_channels[1],self.fx_channels[2]
+   self.emit(0x448c,5,0,0 if left and not right else 1 if right and not left else 5,0.,0)
+   self.fx_route_due=None
   for ch,j in self.jogs.items():
    elapsed=now-j['last']
    if elapsed<.01:continue
@@ -166,7 +190,7 @@ class Bridge:
   for ch,j in self.jogs.items():
    if j['speed'] or j['delta']:self.stop_jog(ch)
   for key,ch in list(self.held):self.emit(key,2,ch,0,0.,0)
-  self.held.clear();self.pad_held.clear()
+  self.held.clear();self.pad_held.clear();self.fx_route_due=None
   for ch in self.shift:self.shift[ch]=False;self.grid_ticks[ch]=0
 def listen_reconnecting(b,lib,running,discover,sleep=time.sleep):
  """Release controller gestures on loss; rediscover ALSA numbering on return."""
@@ -207,11 +231,20 @@ def listen_reconnecting(b,lib,running,discover,sleep=time.sleep):
   for _ in range(20):
    if not running():break
    sleep(.05)
+def fx_led_value(path,now=None):
+ """Native publisher refreshes the four-byte state while the player draws."""
+ now=time.time() if now is None else now
+ try:
+  file=Path(path);data=file.read_bytes()
+  enabled=len(data)==4 and struct.unpack('<I',data)[0]==1 and 0<=now-file.stat().st_mtime<2
+ except OSError:enabled=False
+ return 0x7f if enabled and int(time.monotonic()*4)%2==0 else 0
+
 def cue_feedback(lib,running,discover,path,sleep=time.sleep):
  """Output failures never interrupt MIDI input; reconnect and resend both LEDs."""
  lib.snd_rawmidi_write.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_size_t]
  lib.snd_rawmidi_write.restype=ctypes.c_ssize_t
- handle=None;last=None;retry=0;warned=False;refresh=0
+ handle=None;last=None;retry=0;warned=False;refresh=0;last_fx=None
  try:
   while running():
    if handle is None:
@@ -222,7 +255,7 @@ def cue_feedback(lib,running,discover,path,sleep=time.sleep):
      candidate=ctypes.c_void_p()
      if lib.snd_rawmidi_open(None,ctypes.byref(candidate),devices[0].encode(),2)<0:
       raise OSError('Cannot open FLX4 MIDI output')
-     handle=candidate;last=None;warned=False
+     handle=candidate;last=None;last_fx=None;warned=False
     except (OSError,subprocess.SubprocessError) as error:
      if not warned:print(f'FLX4 cue LEDs unavailable: {error}; retrying',flush=True)
      warned=True;retry=time.monotonic()+1;continue
@@ -231,6 +264,11 @@ def cue_feedback(lib,running,discover,path,sleep=time.sleep):
     value=struct.unpack('<I',data)[0] if len(data)==4 else 0
     if value>3:value=0
    except OSError:value=0
+   fx=fx_led_value(Path(path).with_name('rx3-fx-state'))
+   if fx!=last_fx or time.monotonic()>=refresh:
+    if lib.snd_rawmidi_write(handle,bytes([0x94,0x47,fx]),3)!=3:
+     lib.snd_rawmidi_close(handle);handle=None;retry=time.monotonic()+1;continue
+    last_fx=fx
    # Periodic refresh detects unplugged outputs even when cue state is unchanged.
    if value!=last or time.monotonic()>=refresh:
     failed=False
@@ -244,6 +282,7 @@ def cue_feedback(lib,running,discover,path,sleep=time.sleep):
  finally:
   if handle is not None:
    for channel in range(2):lib.snd_rawmidi_write(handle,bytes([0x90+channel,0x54,0]),3)
+   lib.snd_rawmidi_write(handle,bytes([0x94,0x47,0]),3)
    lib.snd_rawmidi_close(handle)
 
 def main():
