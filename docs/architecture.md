@@ -11,7 +11,7 @@ The root `rx3` command dispatches into `rx3tool/cli.py`. Native helpers and the 
 | Graphics/touch | `src/native/fb-present.c`, `drm-present.h`, `frame-*.h/.c`, `touch-bridge.c`: complete-frame presentation, scaling and evdev translation |
 | Player/UI | `src/native/fbshim.c`, `control-shim.c`, `native-*.c/.h`: compatibility hooks and native control surfaces |
 | Audio | `src/native/audio-*.c/.h`: ALSA interposition, paired recovery, stable handles, bounded writes and pacing |
-| MIDI | `scripts/controllers/flx6-rx3.py`: XML input translation, controller discovery and reconnect |
+| MIDI | `scripts/controllers/midi-rx3.py`: XML input translation, controller discovery and reconnect |
 | Templates | `config/asound.conf`, `config/rx3.conf.example`; generated user settings remain at root `rx3.conf` |
 
 The runtime owns emulated devices, patched player/libraries and a local writable library view. Original music is mounted read-only. Shared complete-frame buffers decouple presentation from native redraw; the control FIFO carries translated input. [Audio recovery](audio-recovery.md) describes the ALSA boundary.

@@ -1,5 +1,5 @@
 import importlib.util, pathlib, tempfile, unittest
-spec=importlib.util.spec_from_file_location('bridge',(pathlib.Path(__file__).resolve().parents[2] / 'scripts/controllers/flx6-rx3.py'))
+spec=importlib.util.spec_from_file_location('bridge',(pathlib.Path(__file__).resolve().parents[2] / 'scripts/controllers/midi-rx3.py'))
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 class Navigation(unittest.TestCase):
  def test_shift_browse_zoom_is_separate(self):

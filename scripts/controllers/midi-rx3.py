@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Use BiteDJ's installed MIDI definitions to feed the RX3 native key queue.
+"""Translate FLX4 and FLX6 XML MIDI mappings into the RX3 native key queue.
 Hot-cue, beat-loop and default beat-jump banks supported. FLX4 headphone CUE feedback supported.
 """
 import threading
@@ -200,25 +200,25 @@ def listen_reconnecting(b,lib,running,discover,sleep=time.sleep):
   handle=ctypes.c_void_p()
   try:
    devices=discover()
-   if len(devices)!=1:raise OSError(errno.ENODEV,'Expected one FLX6 MIDI input')
+   if len(devices)!=1:raise OSError(errno.ENODEV,'Expected one controller MIDI input')
    rc=lib.snd_rawmidi_open(ctypes.byref(handle),None,devices[0].encode(),2)
-   if rc<0:raise OSError(-rc,'Cannot open FLX6 MIDI input')
+   if rc<0:raise OSError(-rc,'Cannot open controller MIDI input')
   except (OSError,subprocess.SubprocessError) as e:
-   if not waiting:print(f'Waiting for FLX6 MIDI: {e}',flush=True)
+   if not waiting:print(f'Waiting for controller MIDI: {e}',flush=True)
    waiting=True
    for _ in range(20):
     if not running():break
     sleep(.05)
    continue
   waiting=False
-  print(f'Listening to {devices[0]} (input only)',flush=True)
+  print(f'Listening to {devices[0]} (MIDI input)',flush=True)
   try:
    while running():
     n=lib.snd_rawmidi_read(handle,buf,len(buf))
     if n>0:b.feed(buf.raw[:n])
     elif n in (0,-errno.EAGAIN):sleep(.005)
     elif n!=-errno.EINTR:
-     print(f'FLX6 MIDI read failed ({n}); reconnecting',flush=True)
+     print(f'Controller MIDI read failed ({n}); reconnecting',flush=True)
      break
     b.tick()
   finally:

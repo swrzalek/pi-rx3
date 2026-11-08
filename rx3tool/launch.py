@@ -284,7 +284,7 @@ class Launcher:
                 found['display'].append(pid)
             elif exe == 'rx3-touch-bridge' and len(argv) > 2 and argv[2] == touch:
                 found['touch'].append(pid)
-            elif exe.startswith('python') and len(argv) > 1 and os.path.basename(argv[1]) == 'flx6-rx3.py':
+            elif exe.startswith('python') and len(argv) > 1 and os.path.basename(argv[1]) in ('midi-rx3.py', 'flx6-rx3.py'):
                 if '--fifo' in argv and (argv.index('--fifo') + 1 < len(argv)
                                             and argv[argv.index('--fifo') + 1] == control):
                     found['midi'].append(pid)
@@ -402,7 +402,7 @@ class Launcher:
                 self.spawn('touch', [self.build / 'rx3-touch-bridge', touch,
                                      self.rt('dev/tsc2007_2-0048'), '--fullscreen'], env)
             if not running['midi']:
-                self.spawn('midi', [sys.executable, REPO / 'scripts/controllers/flx6-rx3.py', '--mapping', mapping,
+                self.spawn('midi', [sys.executable, REPO / 'scripts/controllers/midi-rx3.py', '--mapping', mapping,
                                     '--fifo', self.rt('dev/rx3-control'),
                                     '--state', self.state / 'midi-jog-state.json',
                                     '--port-name', self.config.get('controller', 'midi_name'),

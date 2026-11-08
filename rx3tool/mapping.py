@@ -26,7 +26,7 @@ def ensure(config, offline=False, dry_run=False):
             raise Failure('Downloaded controller mapping checksum does not match; nothing installed')
         with Tree(target.parent, create=True) as tree:
             tree.write(target.name, data, 0o644, replace=False)
-    spec = importlib.util.spec_from_file_location('rx3_mapping_check', REPO / 'scripts/controllers/flx6-rx3.py')
+    spec = importlib.util.spec_from_file_location('rx3_mapping_check', REPO / 'scripts/controllers/midi-rx3.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     try:

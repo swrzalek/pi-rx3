@@ -5,7 +5,7 @@ import errno
 import importlib.util
 import tempfile
 from pathlib import Path
-spec=importlib.util.spec_from_file_location('midi',(Path(__file__).resolve().parents[2] / 'scripts/controllers/flx6-rx3.py'))
+spec=importlib.util.spec_from_file_location('midi',(Path(__file__).resolve().parents[2] / 'scripts/controllers/midi-rx3.py'))
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 with tempfile.TemporaryDirectory() as d:
  p=Path(d)/'map.xml';p.write_text('<root/>')

@@ -119,7 +119,7 @@ class SetupTests(unittest.TestCase):
         processes = [(123, 1000, ['rbp-pi'], 'rbp-pi')]
         with patch('rx3tool.system.processes', return_value=processes), patch('rx3tool.system.process_root', return_value=None):
             self.assertEqual(system.player_pids(self.cfg.runtime), [])
-        with patch('rx3tool.launch.processes', return_value=[(123, 1000, ['python3', 'flx6-rx3.py'], 'python3')]), patch('rx3tool.launch.os.getuid', return_value=1000), patch('rx3tool.launch.player_pids', return_value=[]):
+        with patch('rx3tool.launch.processes', return_value=[(123, 1000, ['python3', 'midi-rx3.py'], 'python3')]), patch('rx3tool.launch.os.getuid', return_value=1000), patch('rx3tool.launch.player_pids', return_value=[]):
             self.assertEqual(Launcher(self.cfg).helpers()['midi'], [])
 
     def test_sudo_monitor_is_scoped_to_runtime(self):

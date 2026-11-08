@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock
 from rx3tool import REPO
 
-spec = importlib.util.spec_from_file_location('cue_bridge', REPO / 'scripts/controllers/flx6-rx3.py')
+spec = importlib.util.spec_from_file_location('cue_bridge', REPO / 'scripts/controllers/midi-rx3.py')
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
 

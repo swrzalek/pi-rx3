@@ -1,5 +1,5 @@
 import importlib.util,tempfile,pathlib
-s=importlib.util.spec_from_file_location('bridge',(pathlib.Path(__file__).resolve().parents[2] / 'scripts/controllers/flx6-rx3.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+s=importlib.util.spec_from_file_location('bridge',(pathlib.Path(__file__).resolve().parents[2] / 'scripts/controllers/midi-rx3.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 controls=[]
 for deck,status in [(1,0x97),(2,0x99)]:
  for i in range(8):
