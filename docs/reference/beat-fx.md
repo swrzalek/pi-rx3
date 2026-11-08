@@ -21,9 +21,14 @@ The recovered ELF retains symbols. No firmware or recovery key is committed.
   0x50e54 identifies 0=PLAYER_0, 1=PLAYER_1, 5=MASTER.
 - Physical panel dispatch at 0x38012c/0x38035c/0x3803b8 sends On/Off and Beat
   Prev/Next as ordinary operation 0/2 press/release pairs on channel 0.
-- `DjEngineIF::isBeatEffectOn` at 0x4d1bc provides the native enabled state.
-  The UI draw hook publishes this periodically; the MIDI worker rejects state
-  older than two seconds and drives a fixed 2 Hz blink, independent of BPM.
+- LED state comes from MasterInnards +0x44, the user-facing On/Off byte.
+  `MasterInnards::onEv_BeatEffectEnable` at 0x344044 compares it, toggles it
+  for input value 2 (0x3440e0), and stores it at 0x344098. On disable it
+  selects engine effect type 0 at 0x3440c8. `DjEngineIF::isBeatEffectOn`
+  can remain true for that internal off effect, so it is unsuitable for LEDs.
+  The UI draw hook publishes the user state periodically; the MIDI worker
+  rejects state older than two seconds and drives a fixed 2 Hz blink.
+
 
 FLX4 MIDI messages and 7-bit Level/Depth normalization follow Mixxx's 2.5
 [Pioneer-DDJ-FLX4 XML](https://github.com/mixxxdj/mixxx/blob/2.5/res/controllers/Pioneer-DDJ-FLX4.midi.xml)

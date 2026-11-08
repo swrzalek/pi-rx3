@@ -1,3 +1,4 @@
+#include "fx-state.h"
 #include <fcntl.h>
 /* RX3 v1.19 native DS_GR transport strip. GUI-thread rendering only. */
 #include <stdint.h>
@@ -155,10 +156,8 @@ static void publish_fx(void) {
     static int frames;
     if (++frames % 6)
         return;
-    void *engine = *(void *volatile *)0x0268617c;
-    if (!engine)
-        return;
-    uint32_t state = ((int (*)(void *))0x4d1bc)(engine) ? 1 : 0;
+    void *root = *(void *volatile *)0x026867c0;
+    uint32_t state = rx3_fx_enabled(root);
     int fd = open("/dev/rx3-fx-state", O_WRONLY | O_NONBLOCK);
     if (fd >= 0) {
         (void)write(fd, &state, sizeof(state));
