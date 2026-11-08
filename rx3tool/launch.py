@@ -3,6 +3,7 @@
 Privileged actions are limited to: bind-mounting /dev/{null,zero,urandom,full},
 /dev/snd and /proc/asound into the runtime, mounting the configured music USB
 read-only inside it, and running the player with `chroot` as your own user.
+With --stop-desktop it also stops the graphical login service.
 Every such command is printed before it runs; --dry-run prints only.
 """
 from contextlib import nullcontext
@@ -341,12 +342,35 @@ class Launcher:
                           'Set [controller] mapping in rx3.conf to your Pioneer-DDJ-FLX6.midi.xml')
         return drm, how, touch, touch_how, mapping
 
-    def start(self):
+    def stop_desktop(self):
+        """Release DRM ownership without terminating the invoking session."""
+        remote = bool(os.environ.get('SSH_CONNECTION') or os.environ.get('SSH_TTY'))
+        graphical = (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')
+                     or os.environ.get('XDG_SESSION_TYPE') in ('x11', 'wayland'))
+        if graphical and not remote:
+            raise Failure('--stop-desktop must run from SSH or a text console',
+                          'Stopping the desktop closes its terminals. Save your work, then use SSH '
+                          'or switch to a text console with Ctrl+Alt+F3 and log in there.')
+        if not shutil.which('systemctl'):
+            raise Failure('--stop-desktop requires systemctl',
+                          'Log out of the graphical desktop manually, then run ./rx3 start.')
+        stage('Releasing the display from the desktop')
+        warn('Stopping the graphical login service logs out desktop users; save desktop work first.')
+        info('Restore the desktop later with: sudo systemctl start display-manager')
+        result = self.sudo(['systemctl', 'stop', 'display-manager.service'], check=False, capture=True)
+        if result.returncode:
+            raise Failure('Could not stop the graphical desktop',
+                          (result.stderr or result.stdout or '').strip() +
+                          '\nLog out of the desktop manually, then run ./rx3 start.')
+
+    def start(self, stop_desktop=False):
         say(f'Starting RX3 from {self.runtime}')
         drm, drm_how, touch, touch_how, mapping = self.preflight()
         with self.lock():
             running = self.helpers()
             new_player = not running['player']
+            if stop_desktop:
+                self.stop_desktop()
             usb = False
             if new_player:
                 usb = self.prepare_mounts()

@@ -50,3 +50,19 @@ downloaded and verified automatically. Normal prerequisite checks still apply.
 Use `./rx3 config wizard` to save settings without starting. To use another
 settings file: `./rx3 --config /path/to/settings.conf start --config`.
 `./rx3 start --config --dry-run` previews selections without saving them.
+
+To release the display from the Raspberry Pi desktop, save desktop work and
+run from **SSH or a text console** (Ctrl+Alt+F3):
+
+```sh
+./rx3 start --stop-desktop
+```
+
+This logs out graphical users by stopping `display-manager.service`. It does
+not change boot settings. Local desktop terminals are rejected because stopping
+the desktop would close them. The flag can be combined with `--config`.
+After `./rx3 stop`, restore the desktop with:
+
+```sh
+sudo systemctl start display-manager
+```

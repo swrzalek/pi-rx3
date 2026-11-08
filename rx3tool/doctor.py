@@ -353,8 +353,9 @@ class Doctor:
         desktops = running(DESKTOPS)
         if desktops:
             self.warn('A desktop session is running: ' + ', '.join(sorted({c for _, c in desktops})),
-                      'RX3 needs exclusive use of the display. Log out of the desktop, or boot to\n'
-                      'the console (sudo raspi-config > System Options > Boot > Console), then start RX3.')
+                      'RX3 needs exclusive use of the display. Save desktop work, then run\n'
+                      './rx3 start --stop-desktop from SSH or a text console (Ctrl+Alt+F3).\n'
+                      'Alternatively, log out of the desktop or boot to the console.')
         if not Path(FONT).is_file():
             self.fail(f'Font {FONT} is missing (used by the display helper)',
                       'Install: sudo apt install fonts-dejavu-core', 'fonts-dejavu-core')

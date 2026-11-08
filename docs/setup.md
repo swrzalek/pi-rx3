@@ -100,3 +100,18 @@ temporary and still take precedence for the current launch. Selecting FLX4
 uses the shipped RX3 mapping; FLX6 startup fetches its pinned mapping if missing.
 The wizard does not install dependencies, change audio servers or bypass device
 checks. Runtime, build and user settings retain their existing defaults.
+
+## Starting while the desktop is running
+
+The desktop compositor can hold the DRM display. Save desktop work, then use
+SSH or switch to a text console with Ctrl+Alt+F3 and log in. Run
+`./rx3 start --stop-desktop` to stop the graphical login service before RX3
+launches. This logs out graphical sessions and closes desktop applications.
+It leaves boot settings unchanged. A terminal inside the local desktop cannot
+use this flag because it would be closed during startup. Combine it with
+`--config` if device selection is also needed.
+
+Stop RX3 with `./rx3 stop`, then restore the desktop with
+`sudo systemctl start display-manager`. If startup fails after stopping the
+desktop, the same command restores it. This flag does not stop per-user audio
+servers; inspect player logs if ALSA reports a busy device.

@@ -122,6 +122,8 @@ def main(argv=None):
     start.add_argument('--dry-run', action='store_true')
     start.add_argument('--config', dest='guided_config', action='store_true',
                        help='select devices interactively, save settings, then start')
+    start.add_argument('--stop-desktop', action='store_true',
+                       help='log out the graphical desktop to release the display (run from SSH or text console)')
     stop = command('stop', 'stop RX3 and release the controller, display and mounts')
     stop.add_argument('--keep-mounts', action='store_true', help='leave the runtime mounts in place')
     stop.add_argument('--dry-run', action='store_true')
@@ -188,7 +190,10 @@ def run(args):
         from .launch import Launcher
         launcher = Launcher(config, getattr(args, 'dry_run', False))
         if args.command == 'start':
-            launcher.start()
+            if args.stop_desktop:
+                launcher.start(stop_desktop=True)
+            else:
+                launcher.start()
         elif args.command == 'stop':
             launcher.stop(args.keep_mounts)
         else:
