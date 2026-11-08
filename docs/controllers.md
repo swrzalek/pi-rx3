@@ -24,6 +24,8 @@ mapping = mappings/Pioneer-DDJ-FLX4.rx3.xml
 
 The shipped [profile](../mappings/Pioneer-DDJ-FLX4.rx3.xml) uses 720 jog ticks/revolution. It covers both decks' load/play/cue, loops, sync/leader, quantize, tempo/range and jog; browsing/zoom; gain/EQ/filter/faders/crossfader/headphone controls; hot cues, beat loops and default beat-jump pads. Shift+jog keeps the bridge's grid-edit behavior. FLX6 resolution and behavior are unchanged.
 
-Not covered: LED feedback, sampler, Pad FX/Beat FX, smart functions, memory-cue navigation, jog loop-end adjustment, hot-cue deletion, beat-jump size selection or exact rekordbox acceleration. Physical retesting is required, especially deck 2, master/headphone routing and touch alignment.
+The FLX4 bridge sends headphone CUE LED feedback for both channels from the native mixer input snapshot. Updates include touchscreen actions and are resent after MIDI output reconnection. Other LEDs remain unsupported. MIDI output failures leave input handling active. The snapshot tracks dispatched actions rather than audio-engine acknowledgements.
+
+Not covered: other LED feedback, sampler, Pad FX/Beat FX, smart functions, memory-cue navigation, jog loop-end adjustment, hot-cue deletion, beat-jump size selection or exact rekordbox acceleration. Physical retesting is required, especially deck 2, master/headphone routing and touch alignment.
 
 Reference MIDI addresses: [Mixxx FLX4 XML](https://github.com/mixxxdj/mixxx/blob/2.5/res/controllers/Pioneer-DDJ-FLX4.midi.xml); jog encoding: [Mixxx FLX4 script](https://github.com/mixxxdj/mixxx/blob/2.5/res/controllers/Pioneer-DDJ-FLX4-script.js). The profile is an RX3 input mapping, not a complete Mixxx preset.

@@ -378,6 +378,7 @@ class Launcher:
                     with Tree(self.runtime) as tree:
                         tree.sparse_file('dev/rx3-present-frame', FRAME_BYTES, 0o600)
                         tree.write('dev/rx3-ui-state', UI_STATE, 0o600)
+                        tree.write('dev/rx3-cue-state', struct.pack('<I', 0), 0o600)
                 stage('Starting the player')
                 if not self.dry_run:
                     self.ensure_sudo()

@@ -1,5 +1,11 @@
 #include "mixer-state.h"
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+static void publish_cue(uint32_t value){
+ int fd=open("/dev/rx3-cue-state",O_WRONLY|O_TRUNC|O_NONBLOCK);
+ if(fd>=0){(void)write(fd,&value,sizeof(value));close(fd);}
+}
 #include "tempo-input.h"
 static uint32_t tempo_guard;
 static struct rx3_tempo_input tempo_inputs[2];
@@ -32,7 +38,7 @@ void rx3_mixer_observe(int key,int operation,int channel,float value){
  }else if(key==0x5020&&(channel==1||channel==2)&&(operation==0||operation==2)){
   uint32_t bit=1u<<(channel-1);lock();
   if(operation==0){if(!(held&bit)){cue^=bit;sequence++;}held|=bit;}else held&=~bit;
-  unlock();
+  publish_cue(cue);unlock();
  }
 }
 int rx3_mixer_snapshot(struct rx3_mixer_snapshot *out){

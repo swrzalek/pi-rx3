@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Use BiteDJ's installed MIDI definitions to feed the RX3 native key queue.
-Input only; hot-cue, beat-loop and default beat-jump banks supported. LED feedback pending.
+Hot-cue, beat-loop and default beat-jump banks supported. FLX4 headphone CUE feedback supported.
 """
+import threading
+from pathlib import Path
 import argparse, ctypes, errno, json, os, re, signal, struct, subprocess, time
 import xml.etree.ElementTree as ET
 BUTTONS={'play':0x4101,'cue_default':0x4102,'loop_in':0x410c,'loop_out':0x410d,
@@ -205,6 +207,45 @@ def listen_reconnecting(b,lib,running,discover,sleep=time.sleep):
   for _ in range(20):
    if not running():break
    sleep(.05)
+def cue_feedback(lib,running,discover,path,sleep=time.sleep):
+ """Output failures never interrupt MIDI input; reconnect and resend both LEDs."""
+ lib.snd_rawmidi_write.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_size_t]
+ lib.snd_rawmidi_write.restype=ctypes.c_ssize_t
+ handle=None;last=None;retry=0;warned=False;refresh=0
+ try:
+  while running():
+   if handle is None:
+    if time.monotonic()<retry:sleep(.02);continue
+    try:
+     devices=discover()
+     if len(devices)!=1:raise OSError('Expected one FLX4 MIDI output')
+     candidate=ctypes.c_void_p()
+     if lib.snd_rawmidi_open(None,ctypes.byref(candidate),devices[0].encode(),2)<0:
+      raise OSError('Cannot open FLX4 MIDI output')
+     handle=candidate;last=None;warned=False
+    except (OSError,subprocess.SubprocessError) as error:
+     if not warned:print(f'FLX4 cue LEDs unavailable: {error}; retrying',flush=True)
+     warned=True;retry=time.monotonic()+1;continue
+   try:
+    data=Path(path).read_bytes()
+    value=struct.unpack('<I',data)[0] if len(data)==4 else 0
+    if value>3:value=0
+   except OSError:value=0
+   # Periodic refresh detects unplugged outputs even when cue state is unchanged.
+   if value!=last or time.monotonic()>=refresh:
+    failed=False
+    for channel in range(2):
+     packet=bytes([0x90+channel,0x54,0x7f if value&(1<<channel) else 0])
+     if lib.snd_rawmidi_write(handle,packet,3)!=3:failed=True;break
+    if failed:
+     lib.snd_rawmidi_close(handle);handle=None;retry=time.monotonic()+1
+    else:last=value;refresh=time.monotonic()+1
+   sleep(.02)
+ finally:
+  if handle is not None:
+   for channel in range(2):lib.snd_rawmidi_write(handle,bytes([0x90+channel,0x54,0]),3)
+   lib.snd_rawmidi_close(handle)
+
 def main():
  # ./rx3 start passes every path; the defaults only suit a manual run.
  runtime=os.environ.get('RX3_RUNTIME')
@@ -241,6 +282,14 @@ def main():
   listing=subprocess.check_output(['amidi','-l'],text=True)
   return re.findall(r'^I[O ]\s+(hw:\S+)\s+.*'+re.escape(a.port_name),listing,re.M)
  running=True
+ feedback=None
+ if a.port_name=='DDJ-FLX4':
+  def outputs():
+   listing=subprocess.check_output(['amidi','-l'],text=True)
+   return re.findall(r'^[I ]O\s+(hw:\S+)\s+.*'+re.escape(a.port_name),listing,re.M)
+  feedback=threading.Thread(target=cue_feedback,args=(lib,lambda:running,outputs,
+      os.path.join(os.path.dirname(a.fifo),'rx3-cue-state')),daemon=True)
+  feedback.start()
  def stop(*_):
   nonlocal running
   running=False
@@ -248,6 +297,8 @@ def main():
  try:
   listen_reconnecting(b,lib,lambda:running,discover)
  finally:
+  running=False
+  if feedback:feedback.join(timeout=2)
   b.release()
   with open(statefile+'.tmp','w') as f:json.dump({'player':player,'totals':{ch:j['total'] for ch,j in b.jogs.items()}},f)
   os.replace(statefile+'.tmp',statefile)
