@@ -91,7 +91,7 @@ def main(argv=None):
     doctor.add_argument('--stage', action='append', choices=('recover', 'build', 'runtime', 'devices'),
                         help='check only these stages (repeatable)')
     cfg = command('config', 'show the effective settings or create rx3.conf')
-    cfg.add_argument('action', nargs='?', choices=('show', 'init'), default='show')
+    cfg.add_argument('action', nargs='?', choices=('show', 'init', 'wizard'), default='show')
     cfg.add_argument('--force', action='store_true', help='with init: replace an existing rx3.conf')
     recover = command('recover', 'download and verify the official RX3 1.19 files, recover the images')
     recover.add_argument('--from', dest='directories', action='append', default=[], metavar='DIR',
@@ -120,6 +120,8 @@ def main(argv=None):
     setup.add_argument('--dry-run', action='store_true')
     start = command('start', 'start the player, display, touch and MIDI helpers')
     start.add_argument('--dry-run', action='store_true')
+    start.add_argument('--config', dest='guided_config', action='store_true',
+                       help='select devices interactively, save settings, then start')
     stop = command('stop', 'stop RX3 and release the controller, display and mounts')
     stop.add_argument('--keep-mounts', action='store_true', help='leave the runtime mounts in place')
     stop.add_argument('--dry-run', action='store_true')
@@ -149,7 +151,13 @@ def run(args):
     if args.command == 'selftest':
         return selftest(args.verbose)
     config = configuration.load(args.config, args.set,
-                                allow_missing=args.command == "config" and args.action == "init")
+                                allow_missing=(args.command == "config" and args.action in ("init", "wizard"))
+                                or (args.command == "start" and args.guided_config))
+    if args.command == "start" and args.guided_config:
+        from .wizard import configure
+        config = configure(config, args.dry_run)
+        from .mapping import ensure
+        ensure(config, dry_run=args.dry_run)
     if args.command == 'doctor':
         from .doctor import Doctor, STAGES
         return Doctor(config, tuple(args.stage) if args.stage else STAGES).run()
@@ -222,6 +230,10 @@ def setup(config, args):
 
 
 def config_command(config, args):
+    if args.action == 'wizard':
+        from .wizard import configure
+        configure(config)
+        return 0
     target = config.source or (REPO / 'rx3.conf')
     if args.action == 'init':
         if target.exists() and not args.force:

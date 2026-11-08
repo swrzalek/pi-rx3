@@ -85,3 +85,18 @@ Use a **new empty runtime** rather than an old hand-assembled rootfs. Stop the o
 | Player/helper exits | Read `player.log`, `display.log`, `touch.log`, `midi.log` under `work/state/logs/`; run stop before retrying. |
 | USB already mounted without UTF-8 | Unmount it in the desktop without unplugging, then retry. |
 | Another installation owns devices | Stop it with its own launcher; this launcher scopes process cleanup to its configured runtime. |
+
+## Guided device configuration
+
+Run `./rx3 start --config` in a terminal with your controller and music USB
+connected. Select your controller (FLX4 is experimental), audio card, FAT32
+music USB, display and touchscreen. Enter preserves the current value. Review
+the settings and answer `y` to save and start. Declining or interrupted input
+leaves settings untouched and does not start the player.
+
+`./rx3 config wizard` saves settings without starting. Existing paths and
+custom settings are preserved. Environment and `--set` overrides remain
+temporary and still take precedence for the current launch. Selecting FLX4
+uses the shipped RX3 mapping; FLX6 startup fetches its pinned mapping if missing.
+The wizard does not install dependencies, change audio servers or bypass device
+checks. Runtime, build and user settings retain their existing defaults.

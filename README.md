@@ -35,3 +35,18 @@ Fresh installation on a second physical Pi, full FLX4 routing and landscape touc
 ## Origin and permissions
 
 This private repository combines [upstream PR #1](https://github.com/xsploit/rx3-pi/pull/1) and [PR #4](https://github.com/xsploit/rx3-pi/pull/4), preserving their history. No project-wide license has been identified; broader reuse and redistribution permission remains unresolved. Keep the [third-party notices](THIRD-PARTY-NOTICES.md). Firmware, keys, proprietary libraries and music are recovered or supplied locally, not distributed here.
+
+For guided device setup, connect your controller, screen and music USB, then run:
+
+```sh
+./rx3 start --config
+```
+
+Choose FLX4 (experimental) or FLX6, the controller audio card, a FAT32 music
+USB, display and touchscreen. Enter keeps the current setting. Review and
+confirm to save `rx3.conf` and continue startup; later runs only need
+`./rx3 start`. FLX4 uses the included mapping; a missing FLX6 mapping is
+downloaded and verified automatically. Normal prerequisite checks still apply.
+Use `./rx3 config wizard` to save settings without starting. To use another
+settings file: `./rx3 --config /path/to/settings.conf start --config`.
+`./rx3 start --config --dry-run` previews selections without saving them.
