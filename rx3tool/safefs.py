@@ -7,6 +7,7 @@ path one component at a time with O_NOFOLLOW relative to directory handles, so
 a symlink in the runtime can never redirect a write, FIFO or directory onto
 the host.
 """
+
 import errno
 import os
 import stat
@@ -20,14 +21,14 @@ DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 def parts(relative):
     """Split a runtime-relative path, interpreting a leading slash inside the runtime and rejecting parent parts."""
     text = str(relative)
-    if '\0' in text or '\n' in text:
-        raise Failure(f'Unsafe path in runtime: {text!r}')
+    if "\0" in text or "\n" in text:
+        raise Failure(f"Unsafe path in runtime: {text!r}")
     pure = PurePosixPath(text)
     if pure.is_absolute():
-        pure = pure.relative_to('/')
-    items = [p for p in pure.parts if p not in ('', '.')]
-    if not items or any(p == '..' for p in items):
-        raise Failure(f'Unsafe path in runtime: {text!r}')
+        pure = pure.relative_to("/")
+    items = [p for p in pure.parts if p not in ("", ".")]
+    if not items or any(p == ".." for p in items):
+        raise Failure(f"Unsafe path in runtime: {text!r}")
     return items
 
 
@@ -42,7 +43,7 @@ class Tree:
             self.fd = os.open(self.root, DIR_FLAGS)
         except OSError as error:
             if error.errno == errno.ELOOP:
-                raise Failure(f'Runtime directory must not be a symlink: {self.root}')
+                raise Failure(f"Runtime directory must not be a symlink: {self.root}")
             raise
 
     def close(self):
@@ -69,8 +70,10 @@ class Tree:
                     child = os.open(name, DIR_FLAGS, dir_fd=fd)
                 except OSError as error:
                     if error.errno in (errno.ELOOP, errno.ENOTDIR):
-                        raise Failure(f'Refusing to follow a symlink or file inside the runtime: '
-                                      f'{"/".join(items)} (at {name!r})')
+                        raise Failure(
+                            f"Refusing to follow a symlink or file inside the runtime: "
+                            f"{'/'.join(items)} (at {name!r})"
+                        )
                     raise
                 os.close(fd)
                 fd = child
@@ -101,7 +104,7 @@ class Tree:
             except FileExistsError:
                 st = os.stat(items[-1], dir_fd=fd, follow_symlinks=False)
                 if not stat.S_ISDIR(st.st_mode):
-                    raise Failure(f'Expected a directory in the runtime: {relative}')
+                    raise Failure(f"Expected a directory in the runtime: {relative}")
                 return False
             child = os.open(items[-1], DIR_FLAGS, dir_fd=fd)
             try:
@@ -128,21 +131,25 @@ class Tree:
         """Atomically create a regular file from bytes or a readable stream."""
         items = parts(relative)
         fd = self._parent(items, True)
-        temp = f'.{items[-1]}.rx3-partial'
+        temp = f".{items[-1]}.rx3-partial"
         try:
             existing = self._lstat_at(fd, items[-1])
             if existing is not None and not stat.S_ISREG(existing.st_mode):
-                raise Failure(f'Refusing to replace a non-regular file in the runtime: {relative}')
+                raise Failure(f"Refusing to replace a non-regular file in the runtime: {relative}")
             if existing is not None and not replace:
                 return False
             try:
                 os.unlink(temp, dir_fd=fd)
             except FileNotFoundError:
                 pass
-            out = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
-                          0o600, dir_fd=fd)
+            out = os.open(
+                temp,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                0o600,
+                dir_fd=fd,
+            )
             try:
-                with os.fdopen(out, 'wb', closefd=False) as target:
+                with os.fdopen(out, "wb", closefd=False) as target:
                     if isinstance(source, (bytes, bytearray, memoryview)):
                         target.write(source)
                     else:
@@ -170,27 +177,30 @@ class Tree:
         items = parts(relative)
         fd = self._parent(items, True)
         try:
-            out = os.open(items[-1], os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK |
-                          os.O_CLOEXEC, mode,
-                          dir_fd=fd)
+            out = os.open(
+                items[-1],
+                os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                mode,
+                dir_fd=fd,
+            )
             try:
                 st = os.fstat(out)
                 if not stat.S_ISREG(st.st_mode):
-                    raise Failure(f'Expected a regular file in the runtime: {relative}')
+                    raise Failure(f"Expected a regular file in the runtime: {relative}")
                 if st.st_size != size:
                     os.ftruncate(out, size)
             finally:
                 os.close(out)
         except OSError as error:
             if error.errno == errno.ELOOP:
-                raise Failure(f'Refusing to follow a symlink inside the runtime: {relative}')
+                raise Failure(f"Refusing to follow a symlink inside the runtime: {relative}")
             raise
         finally:
             os.close(fd)
 
     def symlink(self, relative, target, replace=False):
-        if '\0' in target or not target:
-            raise Failure(f'Unsafe symlink target for {relative}')
+        if "\0" in target or not target:
+            raise Failure(f"Unsafe symlink target for {relative}")
         items = parts(relative)
         fd = self._parent(items, True)
         try:
@@ -199,7 +209,9 @@ class Tree:
                 if stat.S_ISLNK(existing.st_mode) and os.readlink(items[-1], dir_fd=fd) == target:
                     return False
                 if not replace or stat.S_ISDIR(existing.st_mode):
-                    raise Failure(f'Path already exists and differs from the recorded symlink: {relative}')
+                    raise Failure(
+                        f"Path already exists and differs from the recorded symlink: {relative}"
+                    )
                 os.unlink(items[-1], dir_fd=fd)
             os.symlink(target, items[-1], dir_fd=fd)
             return True
@@ -214,7 +226,7 @@ class Tree:
             if existing is not None:
                 if stat.S_ISFIFO(existing.st_mode):
                     return False
-                raise Failure(f'Expected a FIFO in the runtime but found another file: {relative}')
+                raise Failure(f"Expected a FIFO in the runtime but found another file: {relative}")
             os.mkfifo(items[-1], mode, dir_fd=fd)
             return True
         finally:
@@ -225,7 +237,7 @@ class Tree:
         fa, fb = self._parent(a, False), self._parent(b, True)
         try:
             if self._lstat_at(fb, b[-1]) is not None:
-                raise Failure(f'Refusing to overwrite {new_relative}')
+                raise Failure(f"Refusing to overwrite {new_relative}")
             os.rename(a[-1], b[-1], src_dir_fd=fa, dst_dir_fd=fb)
         finally:
             os.close(fa)
@@ -240,7 +252,7 @@ class Tree:
             if existing is None:
                 return False
             if stat.S_ISDIR(existing.st_mode):
-                raise Failure(f'Refusing to remove a directory: {relative}')
+                raise Failure(f"Refusing to remove a directory: {relative}")
             os.unlink(items[-1], dir_fd=fd)
             return True
         finally:
@@ -250,13 +262,15 @@ class Tree:
         items = parts(relative)
         fd = self._parent(items, False)
         try:
-            handle = os.open(items[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=fd)
+            handle = os.open(
+                items[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=fd
+            )
             if not stat.S_ISREG(os.fstat(handle).st_mode):
                 os.close(handle)
                 raise Failure(f"Expected a regular file in the runtime: {relative}")
         finally:
             os.close(fd)
-        return os.fdopen(handle, 'rb')
+        return os.fdopen(handle, "rb")
 
     @staticmethod
     def _lstat_at(fd, name):

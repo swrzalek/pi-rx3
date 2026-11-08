@@ -1,4 +1,5 @@
 """Consistent, plain console output for people following the setup."""
+
 import shlex
 import sys
 
@@ -17,39 +18,39 @@ def say(*parts):
 
 def stage(title):
     say()
-    say(f'== {title}')
+    say(f"== {title}")
 
 
 def ok(message):
-    say(f'  [ OK ] {message}')
+    say(f"  [ OK ] {message}")
 
 
 def warn(message, hint=None):
-    say(f'  [WARN] {message}')
+    say(f"  [WARN] {message}")
     if hint:
         for line in hint.splitlines():
-            say(f'         {line}')
+            say(f"         {line}")
 
 
 def fail(message, hint=None):
-    say(f'  [FAIL] {message}')
+    say(f"  [FAIL] {message}")
     if hint:
         for line in hint.splitlines():
-            say(f'         {line}')
+            say(f"         {line}")
 
 
 def info(message):
-    say(f'         {message}')
+    say(f"         {message}")
 
 
 def quote(argv):
-    return ' '.join(shlex.quote(str(a)) for a in argv)
+    return " ".join(shlex.quote(str(a)) for a in argv)
 
 
 def show_command(argv, privileged=False, dry_run=False):
-    prefix = '[dry-run] ' if dry_run else ''
-    tag = 'sudo ' if privileged else ''
-    say(f'  {prefix}$ {tag}{quote(argv)}')
+    prefix = "[dry-run] " if dry_run else ""
+    tag = "sudo " if privileged else ""
+    say(f"  {prefix}$ {tag}{quote(argv)}")
 
 
 def progress(label, done, total, last=[None]):
@@ -61,15 +62,15 @@ def progress(label, done, total, last=[None]):
         if last[0] == (label, bucket):
             return
         last[0] = (label, bucket)
-        text = f'  {label}: {done / 1048576:.1f} / {total / 1048576:.1f} MiB ({percent}%)'
+        text = f"  {label}: {done / 1048576:.1f} / {total / 1048576:.1f} MiB ({percent}%)"
     else:
         bucket = done // (16 * 1048576)
         if last[0] == (label, bucket):
             return
         last[0] = (label, bucket)
-        text = f'  {label}: {done / 1048576:.1f} MiB'
+        text = f"  {label}: {done / 1048576:.1f} MiB"
     if sys.stdout.isatty():
-        end = '\n' if total and done >= total else '\r'
+        end = "\n" if total and done >= total else "\r"
         print(text.ljust(70), end=end, flush=True)
     else:
         print(text, flush=True)

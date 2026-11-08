@@ -53,10 +53,9 @@ def crypt(body, key, decrypt):
         iv = struct.pack("<I", sector & 0xFFFFFFFF) + bytes(12)
         cipher = Cipher(algorithm, modes.CBC(iv))
         operation = cipher.decryptor() if decrypt else cipher.encryptor()
-        block = body[offset:offset + SECTOR]
-        output[offset:offset + SECTOR] = operation.update(block) + operation.finalize()
+        block = body[offset : offset + SECTOR]
+        output[offset : offset + SECTOR] = operation.update(block) + operation.finalize()
     return bytes(output)
-
 
 
 def crypt_stream(source, destination, byte_count, key, decrypt):
@@ -85,7 +84,7 @@ def read_autoexec(path, key_path):
 def autoexec_iso_metadata(plain):
     """Return the ISO volume name from crypto sector 64."""
     pvd_offset = 64 * SECTOR
-    pvd = plain[pvd_offset:pvd_offset + 2048]
+    pvd = plain[pvd_offset : pvd_offset + 2048]
     if len(pvd) != 2048 or pvd[1:6] != b"CD001":
         raise ValueError("ISO 9660 signature is missing; key or image is incorrect")
     return pvd[40:72].decode("ascii", "replace").rstrip(" \0")

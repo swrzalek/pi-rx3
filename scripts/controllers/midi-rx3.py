@@ -1,0 +1,652 @@
+#!/usr/bin/env python3
+"""Translate FLX4 and FLX6 XML MIDI mappings into the RX3 native key queue.
+Hot-cue, beat-loop and default beat-jump banks supported. FLX4 headphone CUE feedback supported.
+"""
+
+import threading
+from pathlib import Path
+import argparse, ctypes, errno, json, os, re, signal, struct, subprocess, time
+import xml.etree.ElementTree as ET
+
+BUTTONS = {
+    "play": 0x4101,
+    "cue_default": 0x4102,
+    "loop_in": 0x410C,
+    "loop_out": 0x410D,
+    "reloop_toggle": 0x410E,
+    "slip_enabled": 0x4110,
+    "sync_enabled": 0x4112,
+    "sync_leader": 0x4111,
+    "keylock": 0x4108,
+    "PioneerDDJFLX6.cycleTempoRange": 0x4107,
+    "quantize": 0x410B,
+    "pfl": 0x5020,
+    "LoadSelectedTrack": 0x4311,
+    "MoveFocusForward": 0x420C,
+    "MoveFocusBackward": 0x420D,
+    "PioneerDDJFLX6.shiftPressed": 0x4103,
+}
+ANALOG = {
+    "pregain": 0x5019,
+    "parameter3": 0x501A,
+    "parameter2": 0x501B,
+    "parameter1": 0x501C,
+    "volume": 0x501E,
+    "super1": 0x509D,
+    "crossfader": 0x6017,
+    "headMix": 0x4405,
+}
+PAD_BANKS = {"pad-hotcue": 0, "pad-beatloop": 1, "pad-beatjump": 3}
+LOOP_SIZES = ("0.25", "0.5", "1", "2", "4", "8", "16", "32")
+FX_BINDINGS = {
+    "fx_select": (0x448B, "fx-select"),
+    "fx_previous": (0x448B, "fx-previous"),
+    "fx_beat_prev": (0x4490, "fx-button"),
+    "fx_beat_next": (0x4491, "fx-button"),
+    "fx_toggle": (0x448D, "fx-button"),
+    "fx_depth": (0x448F, "analog"),
+    "fx_channel1": (0x448C, "fx-channel1"),
+    "fx_channel2": (0x448C, "fx-channel2"),
+}
+
+HANDLERS = {
+    "fx-channel1": "handle_fx_channel",
+    "fx-channel2": "handle_fx_channel",
+    "fx-select": "handle_fx_button",
+    "fx-previous": "handle_fx_button",
+    "fx-button": "handle_fx_button",
+    "prepare-view": "handle_prepare",
+    "prepare-toggle": "handle_prepare",
+    "browse-push": "handle_browse_push",
+    "view": "handle_navigation",
+    "back": "handle_navigation",
+    "shift": "handle_shift",
+    "grid-jog": "handle_grid",
+    "jog": "handle_jog",
+    "pad-hotcue": "handle_pad",
+    "pad-beatloop": "handle_pad",
+    "pad-beatjump": "handle_pad",
+    "button": "handle_button",
+    "waveform-zoom": "handle_zoom",
+    "relative": "handle_relative",
+    "msb": "handle_msb",
+    "tempo-msb": "handle_msb",
+    "tempo-lsb": "handle_tempo_lsb",
+    "lsb": "handle_lsb",
+    "analog": "handle_analog",
+}
+
+
+class MidiHandlers:
+    """Stateful control behaviors, independent of byte parsing and XML loading."""
+
+    def handle_fx_channel(self, key, ch, mode, status, note, value):
+        self.fx_channels[1 if mode == "fx-channel1" else 2] = bool(value)
+        self.fx_route_due = self.clock() + 0.02
+
+    def handle_fx_button(self, key, ch, mode, status, note, value):
+        identity = (key, 0)
+        if value and identity not in self.held:
+            self.held.add(identity)
+            if mode == "fx-button":
+                self.emit(key, 0, 0, 0, 0.0, 0)
+            else:
+                self.emit(key, 5, 0, -1 if mode == "fx-previous" else 1, 0.0, 0x4658)
+        elif not value and identity in self.held:
+            self.held.discard(identity)
+            if mode == "fx-button":
+                self.emit(key, 2, 0, 0, 0.0, 0)
+
+    def handle_prepare(self, key, ch, mode, status, note, value):
+        if value:
+            self.emit(key, 0, ch, 0, 0.0, 0x4254 if mode == "prepare-view" else 0x4251)
+
+    def handle_browse_push(self, key, ch, mode, status, note, value):
+        if value:
+            self.emit(key, 0, ch, 0, 0.0, 0x4250)
+
+    def handle_navigation(self, key, ch, mode, status, note, value):
+        if value:
+            self.emit(key, 0, ch, 0, 0.0, 0x4256 if mode == "view" else 0x424B)
+
+    def handle_shift(self, key, ch, mode, status, note, value):
+        down = bool(value)
+        self.shift[ch] = down
+        self.grid_ticks[ch] = 0
+        if down:
+            self.stop_jog(ch)
+            if (0x4306, ch) in self.held:
+                self.emit(0x4306, 2, ch, 0, 0.0, 0)
+                self.held.discard((0x4306, ch))
+        if down:
+            self.held.add((key, ch))
+        else:
+            self.held.discard((key, ch))
+        self.emit(key, 0 if down else 2, ch, 0, 0.0, 0)
+
+    def handle_grid(self, key, ch, mode, status, note, value):
+        self.grid_jog(ch, value)
+
+    def handle_jog(self, key, ch, mode, status, note, value):
+        if self.shift[ch]:
+            self.grid_jog(ch, value)
+            return
+        j = self.jogs[ch]
+        delta = value - 64
+        if delta:
+            j["delta"] += delta
+            j["total"] += delta
+            j["moved"] = self.clock()
+
+    def handle_pad(self, key, ch, mode, status, note, value):
+        bank = PAD_BANKS[mode]
+        identity = (key, ch)
+        if value:
+            if self.pad_held.get(identity) == bank:
+                return
+            # Release the old bank before selecting another. Each deck is independent.
+            for (old_key, old_ch), old_bank in list(self.pad_held.items()):
+                if old_ch == ch and old_bank != bank:
+                    self.emit(old_key, 2, ch, 0, 0.0, 0x5040 | old_bank)
+                    del self.pad_held[(old_key, ch)]
+                    self.held.discard((old_key, ch))
+            self.pad_held[identity] = bank
+            self.held.add(identity)
+            self.emit(key, 0, ch, 0, 0.0, 0x5040 | bank)
+        elif self.pad_held.get(identity) == bank:
+            del self.pad_held[identity]
+            self.held.discard(identity)
+            self.emit(key, 2, ch, 0, 0.0, 0x5040 | bank)
+
+    def handle_button(self, key, ch, mode, status, note, value):
+        op = 0 if value else 2
+        if key == 0x4306 and self.shift[ch]:
+            return
+        if key == 0x4306 and op == 2:
+            self.stop_jog(ch)
+        if op == 0:
+            self.held.add((key, ch))
+        else:
+            self.held.discard((key, ch))
+        self.emit(key, op, ch, 0, 0.0, 0)
+
+    def handle_zoom(self, key, ch, mode, status, note, value):
+        if value in (1, 127):
+            self.emit(key, 4, 0, 1 if value == 127 else -1, 0.0, 0x425A)
+
+    def handle_relative(self, key, ch, mode, status, note, value):
+        delta = value if value < 64 else value - 128
+        if delta:
+            self.emit(key, 4, ch, delta, 0.0, 0x4252)  # browser-only encoder intent
+
+    def handle_msb(self, key, ch, mode, status, note, value):
+        self.msb[(status, note)] = value
+
+    def handle_tempo_lsb(self, key, ch, mode, status, note, value):
+        hi = self.msb.get((status, note - 32))
+        if hi is not None:
+            self.emit(key, 5, ch, 0, ((hi << 7) | value) / 8192.0 - 1.0, 0x544D)
+
+    def handle_lsb(self, key, ch, mode, status, note, value):
+        hi = self.msb.get((status, note - 32))
+        if hi is not None:
+            self.emit(key, 4, ch, 0, ((hi << 7) | value) / 16383.0, 0)
+
+    def handle_analog(self, key, ch, mode, status, note, value):
+        self.emit(key, 4, ch, 0, value / 127.0, 0)
+
+
+class Bridge(MidiHandlers):
+    def __init__(self, xml, emit, clock=time.monotonic):
+        self.clock = clock
+        self.jogs = {ch: dict(total=0, delta=0, last=clock(), moved=0, speed=0) for ch in (1, 2)}
+        self.emit = emit
+        self.mapping = {}
+        self.msb = {}
+        self.held = set()
+        self.pad_held = {}
+        self.status = None
+        self.data = []
+        self.shift = {1: False, 2: False}
+        self.grid_ticks = {1: 0, 2: 0}
+        self.fx_channels = {1: False, 2: False}
+        self.fx_route_due = None
+        self._load_profile(xml)
+        # Bind once during setup: no mode classification in the message path.
+        self.handlers = {mode: getattr(self, name) for mode, name in HANDLERS.items()}
+
+    def _load_profile(self, xml):
+        """Compile the controller XML into native control bindings."""
+        root = ET.parse(xml).getroot()
+        self.flx4 = any(c.get("id") == "DDJ-FLX4" for c in root.findall(".//controller"))
+        # Mixxx's FLX4 script declares 720 ticks/revolution; keep FLX6 behavior.
+        self.jog_resolution = 720 if self.flx4 else 7200
+        for c in root.findall(".//controls/control"):
+            g = c.findtext("group", "")
+            key = c.findtext("key", "")
+            match = re.search(r"\[Channel(\d)\]", g)
+            if match:
+                channel = int(match[1])
+                if channel > 2:
+                    continue
+            elif g in ("[Master]", "[Library]", "[Tab]"):
+                channel = 0
+            else:
+                continue
+            if self.flx4:
+                key = key.replace("PioneerDDJFLX4.", "PioneerDDJFLX6.")
+                key = {
+                    "PioneerDDJFLX6.syncPressed": "sync_enabled",
+                    "PioneerDDJFLX6.syncLongPressed": "sync_leader",
+                    "PioneerDDJFLX6.toggleQuantize": "quantize",
+                    "MoveVertical": "PioneerDDJFLX6.browseRotate",
+                }.get(key, key)
+            mode = "button"
+            native = BUTTONS.get(key)
+            if self.flx4 and key in FX_BINDINGS:
+                native, mode = FX_BINDINGS[key]
+
+            if key == "PioneerDDJFLX6.shiftPressed":
+                mode = "shift"
+            if g == "[Tab]" and key in ("library", "PioneerDDJFLX6.viewPressed"):
+                native = 0x202
+                mode = "view"
+            if g == "[Library]" and key == "MoveFocusForward":
+                native = 0x420C
+                mode = "browse-push"
+            if key == "PrepareView":
+                native = 0x203
+                mode = "prepare-view"
+            if key == "PrepareToggle":
+                native = 0x420E
+                mode = "prepare-toggle"
+            if key == "PioneerDDJFLX6.backPressed":
+                native = 0x420D
+                mode = "back"
+            if key in ANALOG:
+                native = ANALOG[key]
+                mode = "analog"
+            if key == "PioneerDDJFLX6.jogTurn":
+                native = 0x4305
+                mode = "jog"
+            if key == "PioneerDDJFLX6.jogSearch":
+                native = 0
+                mode = "grid-jog"
+            if key == "PioneerDDJFLX6.jogTouch" and int(c.findtext("midino"), 0) == 0x36:
+                native = 0x4306
+            if key == "PioneerDDJFLX6.tempoSliderMSB":
+                native = 0x4109
+                mode = "tempo-msb"
+            if key == "PioneerDDJFLX6.tempoSliderLSB":
+                native = 0x4109
+                mode = "tempo-lsb"
+            if key == "PioneerDDJFLX6.browseRotate":
+                native = 0x420C
+                mode = "relative"
+            if key == "PioneerDDJFLX6.waveformZoom":
+                native = 0x420C
+                mode = "waveform-zoom"
+                channel = 0
+            pad = re.fullmatch(r"hotcue_([1-8])_activate", key)
+            if pad:
+                native = 0x4116 + int(pad[1])
+                mode = "pad-hotcue"
+            if key == "PioneerDDJFLX6.beatjumpPadPressed":
+                note = int(c.findtext("midino"), 0)
+                if 0x20 <= note <= 0x27:
+                    native = 0x4117 + note - 0x20
+                    mode = "pad-beatjump"
+            loop = re.fullmatch(r"beatloop_(0\.25|0\.5|1|2|4|8|16|32)_toggle", key)
+            if loop:
+                native = 0x4117 + LOOP_SIZES.index(loop[1])
+                mode = "pad-beatloop"
+            if native is None:
+                continue
+            opts = {o.tag for o in c.findall("./options/*")}
+            if "fourteen-bit-msb" in opts:
+                mode = "msb"
+            if "fourteen-bit-lsb" in opts:
+                mode = "lsb"
+            addr = (int(c.findtext("status"), 0), int(c.findtext("midino"), 0))
+            item = (native, channel, mode)
+            if addr in self.mapping and self.mapping[addr] != item:
+                raise ValueError(f"Conflicting mapping {addr}")
+            self.mapping[addr] = item
+
+    def message(self, status, note, value):
+        off = status & 0xF0 == 0x80
+        if off:
+            status += 0x10
+            value = 0
+        item = self.mapping.get((status, note))
+        if not item:
+            return
+        key, ch, mode = item
+        self.handlers[mode](key, ch, mode, status, note, value)
+
+    def feed(self, data):
+        for b in data:
+            if b >= 0xF8:
+                continue
+            if b & 0x80:
+                self.data = []
+                self.status = b if b < 0xF0 else None
+            elif self.status is not None:
+                self.data.append(b)
+                n = 1 if self.status & 0xF0 in (0xC0, 0xD0) else 2
+                if len(self.data) == n:
+                    if n == 2:
+                        self.message(self.status, *self.data)
+                    self.data = []
+
+    def grid_jog(self, ch, value):
+        total = self.grid_ticks[ch] + value - 64
+        steps = abs(total) // 16 * (1 if total >= 0 else -1)
+        self.grid_ticks[ch] = total - steps * 16
+        # BiteDJ: 5 ms per step. RX3 offset units are quarter milliseconds.
+        if steps:
+            self.emit(0, 4, ch, steps * 20, 0.0, 0x4744)
+
+    def pulse(self, ch):
+        # RX3 uses 1620 pulses/revolution; the input profile sets controller resolution.
+        return round(self.jogs[ch]["total"] * 1620 / self.jog_resolution) & 65535
+
+    def stop_jog(self, ch):
+        j = self.jogs[ch]
+        self.emit(0x4305, 4, ch, 0, 0.0, self.pulse(ch))
+        j["delta"] = 0
+        j["speed"] = 0
+        j["last"] = self.clock()
+
+    def tick(self):
+        now = self.clock()
+        if self.fx_route_due is not None and now >= self.fx_route_due:
+            left, right = self.fx_channels[1], self.fx_channels[2]
+            self.emit(
+                0x448C, 5, 0, 0 if left and not right else 1 if right and not left else 5, 0.0, 0
+            )
+            self.fx_route_due = None
+        for ch, j in self.jogs.items():
+            elapsed = now - j["last"]
+            if elapsed < 0.01:
+                continue
+            if j["delta"]:
+                # 1x = 33 1/3 RPM = one revolution/1.8 seconds.
+                speed = j["delta"] * 1.8 / (self.jog_resolution * elapsed)
+                self.emit(0x4305, 4, ch, 0, speed, self.pulse(ch))
+                j["delta"] = 0
+                j["speed"] = speed
+                j["last"] = now
+            elif j["speed"] and now - j["moved"] >= 0.04:
+                self.stop_jog(ch)
+            elif not j["speed"]:
+                j["last"] = now
+
+    def release(self):
+        for ch, j in self.jogs.items():
+            if j["speed"] or j["delta"]:
+                self.stop_jog(ch)
+        for key, ch in list(self.held):
+            self.emit(key, 2, ch, 0, 0.0, 0)
+        self.held.clear()
+        self.pad_held.clear()
+        self.fx_route_due = None
+        for ch in self.shift:
+            self.shift[ch] = False
+            self.grid_ticks[ch] = 0
+
+
+def listen_reconnecting(b, lib, running, discover, sleep=time.sleep):
+    """Release controller gestures on loss; rediscover ALSA numbering on return."""
+    buf = ctypes.create_string_buffer(1024)
+    waiting = False
+    while running():
+        handle = ctypes.c_void_p()
+        try:
+            devices = discover()
+            if len(devices) != 1:
+                raise OSError(errno.ENODEV, "Expected one controller MIDI input")
+            rc = lib.snd_rawmidi_open(ctypes.byref(handle), None, devices[0].encode(), 2)
+            if rc < 0:
+                raise OSError(-rc, "Cannot open controller MIDI input")
+        except (OSError, subprocess.SubprocessError) as e:
+            if not waiting:
+                print(f"Waiting for controller MIDI: {e}", flush=True)
+            waiting = True
+            for _ in range(20):
+                if not running():
+                    break
+                sleep(0.05)
+            continue
+        waiting = False
+        print(f"Listening to {devices[0]} (MIDI input)", flush=True)
+        try:
+            while running():
+                n = lib.snd_rawmidi_read(handle, buf, len(buf))
+                if n > 0:
+                    b.feed(buf.raw[:n])
+                elif n in (0, -errno.EAGAIN):
+                    sleep(0.005)
+                elif n != -errno.EINTR:
+                    print(f"Controller MIDI read failed ({n}); reconnecting", flush=True)
+                    break
+                b.tick()
+        finally:
+            try:
+                b.release()
+            finally:
+                lib.snd_rawmidi_close(handle)
+                # Never carry a partial message or old 14-bit MSB into a new connection.
+                b.status = None
+                b.data = []
+                b.msb.clear()
+        # Avoid a busy reconnect loop if ALSA still lists a failed device.
+        for _ in range(20):
+            if not running():
+                break
+            sleep(0.05)
+
+
+def fx_led_value(path, now=None):
+    """Native publisher refreshes the four-byte state while the player draws."""
+    now = time.time() if now is None else now
+    try:
+        file = Path(path)
+        data = file.read_bytes()
+        enabled = (
+            len(data) == 4
+            and struct.unpack("<I", data)[0] == 1
+            and 0 <= now - file.stat().st_mtime < 2
+        )
+    except OSError:
+        enabled = False
+    return 0x7F if enabled and int(time.monotonic() * 4) % 2 == 0 else 0
+
+
+def cue_feedback(lib, running, discover, path, sleep=time.sleep):
+    """Output failures never interrupt MIDI input; reconnect and resend both LEDs."""
+    lib.snd_rawmidi_write.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
+    lib.snd_rawmidi_write.restype = ctypes.c_ssize_t
+    handle = None
+    last = None
+    retry = 0
+    warned = False
+    refresh = 0
+    last_fx = None
+    try:
+        while running():
+            if handle is None:
+                if time.monotonic() < retry:
+                    sleep(0.02)
+                    continue
+                try:
+                    devices = discover()
+                    if len(devices) != 1:
+                        raise OSError("Expected one FLX4 MIDI output")
+                    candidate = ctypes.c_void_p()
+                    if (
+                        lib.snd_rawmidi_open(None, ctypes.byref(candidate), devices[0].encode(), 2)
+                        < 0
+                    ):
+                        raise OSError("Cannot open FLX4 MIDI output")
+                    handle = candidate
+                    last = None
+                    last_fx = None
+                    warned = False
+                except (OSError, subprocess.SubprocessError) as error:
+                    if not warned:
+                        print(f"FLX4 cue LEDs unavailable: {error}; retrying", flush=True)
+                    warned = True
+                    retry = time.monotonic() + 1
+                    continue
+            try:
+                data = Path(path).read_bytes()
+                value = struct.unpack("<I", data)[0] if len(data) == 4 else 0
+                if value > 3:
+                    value = 0
+            except OSError:
+                value = 0
+            fx = fx_led_value(Path(path).with_name("rx3-fx-state"))
+            if fx != last_fx or time.monotonic() >= refresh:
+                if lib.snd_rawmidi_write(handle, bytes([0x94, 0x47, fx]), 3) != 3:
+                    lib.snd_rawmidi_close(handle)
+                    handle = None
+                    retry = time.monotonic() + 1
+                    continue
+                last_fx = fx
+            # Periodic refresh detects unplugged outputs even when cue state is unchanged.
+            if value != last or time.monotonic() >= refresh:
+                failed = False
+                for channel in range(2):
+                    packet = bytes([0x90 + channel, 0x54, 0x7F if value & (1 << channel) else 0])
+                    if lib.snd_rawmidi_write(handle, packet, 3) != 3:
+                        failed = True
+                        break
+                if failed:
+                    lib.snd_rawmidi_close(handle)
+                    handle = None
+                    retry = time.monotonic() + 1
+                else:
+                    last = value
+                    refresh = time.monotonic() + 1
+            sleep(0.02)
+    finally:
+        if handle is not None:
+            for channel in range(2):
+                lib.snd_rawmidi_write(handle, bytes([0x90 + channel, 0x54, 0]), 3)
+            lib.snd_rawmidi_write(handle, bytes([0x94, 0x47, 0]), 3)
+            lib.snd_rawmidi_close(handle)
+
+
+def main():
+    # ./rx3 start passes every path; the defaults only suit a manual run.
+    runtime = os.environ.get("RX3_RUNTIME")
+    p = argparse.ArgumentParser()
+    p.add_argument(
+        "--mapping", default=os.path.expanduser("~/.mixxx/controllers/Pioneer-DDJ-FLX6.midi.xml")
+    )
+    p.add_argument(
+        "--fifo",
+        default=runtime and os.path.join(runtime, "dev/rx3-control"),
+        help="runtime dev/rx3-control (default from RX3_RUNTIME)",
+    )
+    p.add_argument("--player-id", help="launcher identity for this player session")
+    p.add_argument("--state", help="jog counter file kept across bridge restarts")
+    p.add_argument("--port-name", default="DDJ-FLX6", help="MIDI port name shown by amidi -l")
+    p.add_argument("--replay")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument(
+        "--check-mapping",
+        action="store_true",
+        help="only load the mapping and report the binding count",
+    )
+    a = p.parse_args()
+    if a.check_mapping:
+        print(
+            f"Loaded {len(Bridge(a.mapping, lambda *c: None).mapping)} MIDI bindings from {a.mapping}"
+        )
+        return
+    if not a.dry_run and not a.fifo:
+        p.error("--fifo is required (or set RX3_RUNTIME)")
+    fd = None if a.dry_run else os.open(a.fifo, os.O_RDWR | os.O_NONBLOCK)
+
+    def emit(*cmd):
+        if fd is not None:
+            os.write(fd, struct.pack("<iiiifi", *cmd))
+        if a.replay or a.dry_run:
+            print(cmd, flush=True)
+
+    b = Bridge(a.mapping, emit)
+    print(f"Loaded {len(b.mapping)} MIDI bindings from {a.mapping}", flush=True)
+    if a.replay:
+        b.feed(open(a.replay, "rb").read())
+        b.release()
+        return
+    # Preserve absolute jog counters across MIDI-reader restarts in this player session.
+    player = a.player_id or subprocess.check_output(["pgrep", "-x", "rbp-pi"], text=True).strip()
+    statefile = a.state or os.path.join(os.path.dirname(a.fifo or "."), "rx3-midi-jog-state.json")
+    try:
+        previous = json.load(open(statefile))
+        if previous.get("player") == player:
+            for ch in (1, 2):
+                b.jogs[ch]["total"] = int(previous["totals"][str(ch)])
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    lib = ctypes.CDLL("libasound.so.2")
+    handle = ctypes.c_void_p()
+    lib.snd_rawmidi_open.argtypes = [
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_int,
+    ]
+    lib.snd_rawmidi_read.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
+    lib.snd_rawmidi_read.restype = ctypes.c_ssize_t
+    lib.snd_rawmidi_close.argtypes = [ctypes.c_void_p]
+
+    def discover():
+        listing = subprocess.check_output(["amidi", "-l"], text=True)
+        return re.findall(r"^I[O ]\s+(hw:\S+)\s+.*" + re.escape(a.port_name), listing, re.M)
+
+    running = True
+    feedback = None
+    if a.port_name == "DDJ-FLX4":
+
+        def outputs():
+            listing = subprocess.check_output(["amidi", "-l"], text=True)
+            return re.findall(r"^[I ]O\s+(hw:\S+)\s+.*" + re.escape(a.port_name), listing, re.M)
+
+        feedback = threading.Thread(
+            target=cue_feedback,
+            args=(
+                lib,
+                lambda: running,
+                outputs,
+                os.path.join(os.path.dirname(a.fifo), "rx3-cue-state"),
+            ),
+            daemon=True,
+        )
+        feedback.start()
+
+    def stop(*_):
+        nonlocal running
+        running = False
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    try:
+        listen_reconnecting(b, lib, lambda: running, discover)
+    finally:
+        running = False
+        if feedback:
+            feedback.join(timeout=2)
+        b.release()
+        with open(statefile + ".tmp", "w") as f:
+            json.dump({"player": player, "totals": {ch: j["total"] for ch, j in b.jogs.items()}}, f)
+        os.replace(statefile + ".tmp", statefile)
+        if fd is not None:
+            os.close(fd)
+
+
+if __name__ == "__main__":
+    main()

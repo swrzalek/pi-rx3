@@ -11,7 +11,7 @@ The root `rx3` command dispatches into `rx3tool/cli.py`. Native helpers and the 
 | Graphics/touch | `src/native/fb-present.c`, `drm-present.h`, `frame-*.h/.c`, `touch-bridge.c`: complete-frame presentation, scaling and evdev translation |
 | Player/UI | `src/native/fbshim.c`, `control-shim.c`, `native-*.c/.h`: compatibility hooks and native control surfaces |
 | Audio | `src/native/audio-*.c/.h`: ALSA interposition, paired recovery, stable handles, bounded writes and pacing |
-| MIDI | `scripts/controllers/flx6-rx3.py`: XML input translation, controller discovery and reconnect |
+| MIDI | `scripts/controllers/midi-rx3.py`: XML input translation, controller discovery and reconnect |
 | Templates | `config/asound.conf`, `config/rx3.conf.example`; generated user settings remain at root `rx3.conf` |
 
 The runtime owns emulated devices, patched player/libraries and a local writable library view. Original music is mounted read-only. Shared complete-frame buffers decouple presentation from native redraw; the control FIFO carries translated input. [Audio recovery](audio-recovery.md) describes the ALSA boundary.
@@ -26,3 +26,18 @@ The runtime owns emulated devices, patched player/libraries and a local writable
 - `tools/glyphs/` generates checked-in headers. Tests live under `tests/`; [key codes](reference/keycodes.txt) and screenshots in `docs/images/` are reference material.
 
 Long chronological research diaries were removed from the current docs during cleanup; the original files remain available in Git history. Current operating instructions live only in [setup](setup.md), and evidence/unfinished work in [validation](validation.md).
+
+## MIDI dispatch
+
+The bridge compiles FLX4/FLX6 XML profiles once at startup. `Bridge.feed`
+parses MIDI bytes; `Bridge.message` normalizes NoteOff and dispatches to a
+bound handler by mode. `MidiHandlers` keeps buttons, jogs, pads, analog input,
+14-bit values and FX behavior separate. Stateful ownership and disconnect
+cleanup remain shared by the bridge. Profile classification is outside the
+message path; no per-message file access, sleeps or threads were added.
+
+To compare a saved earlier bridge with the current implementation, run
+`python3 tools/benchmark-midi.py /path/to/baseline-midi.py`. It first compares
+emitted commands for a deterministic mixed replay, then reports median Python
+dispatch time for jog, depth and FX button messages. This does not measure USB,
+queue delivery, Pi scheduling or audible latency; those require hardware.
